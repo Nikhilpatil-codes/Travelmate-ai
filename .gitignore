@@ -1,0 +1,35 @@
+# Environments & Private Secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# Python & Backend
+__pycache__/
+*.py[cod]
+*$py.class
+*.db
+*.sqlite3
+.pytest_cache/
+venv/
+.venv/
+env/
+
+# Android Build Artifacts & Caches
+android/app/build/
+android/app/.cxx/
+*.apk
+!TravelMate-AI-v1.0.0-debug.apk
+.gradle/
+local.properties
+captures/
+
+# IDE & Editor caches
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
