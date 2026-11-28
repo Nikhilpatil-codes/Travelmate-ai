@@ -190,8 +190,8 @@ def build_test_email_html(recipient: str, test_type: str = "Test Verification") 
     return f"""
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 540px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 14px; background: #ffffff;">
       <div style="text-align: center; margin-bottom: 20px;">
-        <span style="font-size: 38px;">🧭</span>
-        <h2 style="color: #065f46; margin: 8px 0 0 0; font-size: 22px;">TravelMate AI</h2>
+        <div style="display: inline-block; width: 48px; height: 48px; background: #1C155F; border-radius: 12px; line-height: 48px; text-align: center; font-size: 26px; color: #ffffff; box-shadow: 0 4px 12px rgba(28,21,95,0.25);">✈️</div>
+        <h2 style="color: #1C155F; margin: 8px 0 0 0; font-size: 22px;">TravelMate AI</h2>
         <p style="color: #64748b; font-size: 13px; margin: 4px 0 0 0;">Development Email Test • Resend Integration</p>
       </div>
 

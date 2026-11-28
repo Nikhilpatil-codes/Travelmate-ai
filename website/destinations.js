@@ -1,0 +1,1499 @@
+// TravelMate AI - 40 Curated Karnataka Destinations Dataset
+// Single Source of Truth for Mobile APK & Web Portal
+var DESTINATIONS = [
+  {
+    "id": "nandi-hills",
+    "name": "Nandi Hills",
+    "district": "Chikkaballapur",
+    "lat": 13.3702,
+    "lng": 77.6835,
+    "interests": [
+      "Nature",
+      "Mountains",
+      "Photography",
+      "Adventure"
+    ],
+    "moods": [
+      "Relaxing",
+      "Adventure",
+      "Photography",
+      "Friends"
+    ],
+    "bestMonths": [
+      10,
+      11,
+      12,
+      1,
+      2
+    ],
+    "recommendedTime": "Half day",
+    "costPerPersonINR": 400,
+    "transport": [
+      "Car",
+      "Bike"
+    ],
+    "foodOptions": "easy",
+    "description": "Hilltop fort famous for sunrise views above the clouds.",
+    "vegFriendly": true,
+    "image": "images/nandi-hills.jpg"
+  },
+  {
+    "id": "lalbagh",
+    "name": "Lalbagh Botanical Garden",
+    "district": "Bengaluru Urban",
+    "lat": 12.9507,
+    "lng": 77.5848,
+    "interests": [
+      "Nature",
+      "Parks",
+      "Photography"
+    ],
+    "moods": [
+      "Relaxing",
+      "Family",
+      "Photography"
+    ],
+    "bestMonths": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ],
+    "recommendedTime": "2-3 hours",
+    "costPerPersonINR": 250,
+    "transport": [
+      "Car",
+      "Bike",
+      "Bus",
+      "Train"
+    ],
+    "foodOptions": "easy",
+    "description": "Historic botanical garden with a glasshouse and seasonal flower shows.",
+    "vegFriendly": true,
+    "image": "images/lalbagh.jpg"
+  },
+  {
+    "id": "cubbon-park",
+    "name": "Cubbon Park",
+    "district": "Bengaluru Urban",
+    "lat": 12.9763,
+    "lng": 77.5929,
+    "interests": [
+      "Parks",
+      "Nature"
+    ],
+    "moods": [
+      "Relaxing",
+      "Family",
+      "Friends"
+    ],
+    "bestMonths": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ],
+    "recommendedTime": "2-3 hours",
+    "costPerPersonINR": 150,
+    "transport": [
+      "Car",
+      "Bike",
+      "Bus",
+      "Train"
+    ],
+    "foodOptions": "easy",
+    "description": "Large green park in the middle of the city, good for walks and picnics.",
+    "vegFriendly": true,
+    "image": "images/cubbon-park.jpg"
+  },
+  {
+    "id": "bannerghatta",
+    "name": "Bannerghatta National Park",
+    "district": "Bengaluru Urban",
+    "lat": 12.8,
+    "lng": 77.577,
+    "interests": [
+      "Wildlife",
+      "Nature",
+      "Parks"
+    ],
+    "moods": [
+      "Family",
+      "Friends",
+      "Adventure"
+    ],
+    "bestMonths": [
+      10,
+      11,
+      12,
+      1,
+      2,
+      3
+    ],
+    "recommendedTime": "One day",
+    "costPerPersonINR": 900,
+    "transport": [
+      "Car",
+      "Bike",
+      "Bus"
+    ],
+    "foodOptions": "easy",
+    "description": "Safari, zoo and butterfly park on the edge of Bengaluru.",
+    "vegFriendly": true,
+    "image": "images/bannerghatta.jpg"
+  },
+  {
+    "id": "bangalore-palace",
+    "name": "Bangalore Palace",
+    "district": "Bengaluru Urban",
+    "lat": 12.9988,
+    "lng": 77.592,
+    "interests": [
+      "Historical places",
+      "Photography"
+    ],
+    "moods": [
+      "Family",
+      "Photography"
+    ],
+    "bestMonths": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ],
+    "recommendedTime": "2-3 hours",
+    "costPerPersonINR": 500,
+    "transport": [
+      "Car",
+      "Bike",
+      "Bus"
+    ],
+    "foodOptions": "easy",
+    "description": "Tudor-style palace with a large ornate interior and gardens.",
+    "vegFriendly": true,
+    "image": "images/bangalore-palace.jpg"
+  },
+  {
+    "id": "vv-puram-food-street",
+    "name": "VV Puram Food Street",
+    "district": "Bengaluru Urban",
+    "lat": 12.9507,
+    "lng": 77.574,
+    "interests": [
+      "Food"
+    ],
+    "moods": [
+      "Food",
+      "Friends",
+      "Family"
+    ],
+    "bestMonths": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ],
+    "recommendedTime": "2-3 hours",
+    "costPerPersonINR": 400,
+    "transport": [
+      "Car",
+      "Bike",
+      "Bus",
+      "Train"
+    ],
+    "foodOptions": "easy",
+    "description": "Famous evening street-food lane with dosas, chaats and sweets.",
+    "vegFriendly": true,
+    "image": "images/vv-puram-food-street.jpg"
+  },
+  {
+    "id": "commercial-street",
+    "name": "Commercial Street",
+    "district": "Bengaluru Urban",
+    "lat": 12.9833,
+    "lng": 77.6083,
+    "interests": [
+      "Shopping"
+    ],
+    "moods": [
+      "Shopping",
+      "Friends",
+      "Family"
+    ],
+    "bestMonths": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ],
+    "recommendedTime": "Half day",
+    "costPerPersonINR": 1500,
+    "transport": [
+      "Car",
+      "Bike",
+      "Bus",
+      "Train"
+    ],
+    "foodOptions": "easy",
+    "description": "Busy shopping street for clothes, accessories and souvenirs.",
+    "vegFriendly": true,
+    "image": "images/commercial-street.jpg"
+  },
+  {
+    "id": "indiranagar-cafes",
+    "name": "Indiranagar Cafe Trail",
+    "district": "Bengaluru Urban",
+    "lat": 12.9784,
+    "lng": 77.6408,
+    "interests": [
+      "Caf\u00e9s",
+      "Food"
+    ],
+    "moods": [
+      "Food",
+      "Friends",
+      "Relaxing"
+    ],
+    "bestMonths": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ],
+    "recommendedTime": "2-3 hours",
+    "costPerPersonINR": 700,
+    "transport": [
+      "Car",
+      "Bike",
+      "Bus",
+      "Train"
+    ],
+    "foodOptions": "easy",
+    "description": "Cluster of popular cafes, bakeries and restaurants.",
+    "vegFriendly": true,
+    "image": "images/indiranagar-cafes.jpg"
+  },
+  {
+    "id": "savandurga",
+    "name": "Savandurga",
+    "district": "Ramanagara",
+    "lat": 12.9187,
+    "lng": 77.2918,
+    "interests": [
+      "Nature",
+      "Adventure",
+      "Mountains",
+      "Photography"
+    ],
+    "moods": [
+      "Adventure",
+      "Friends",
+      "Photography"
+    ],
+    "bestMonths": [
+      10,
+      11,
+      12,
+      1,
+      2
+    ],
+    "recommendedTime": "Half day",
+    "costPerPersonINR": 300,
+    "transport": [
+      "Car",
+      "Bike"
+    ],
+    "foodOptions": "limited",
+    "description": "Giant monolith hill popular for trekking; carry water and food.",
+    "vegFriendly": true,
+    "image": "images/savandurga.jpg"
+  },
+  {
+    "id": "skandagiri",
+    "name": "Skandagiri",
+    "district": "Chikkaballapur",
+    "lat": 13.4167,
+    "lng": 77.6833,
+    "interests": [
+      "Mountains",
+      "Adventure",
+      "Nature",
+      "Photography"
+    ],
+    "moods": [
+      "Adventure",
+      "Friends",
+      "Photography"
+    ],
+    "bestMonths": [
+      10,
+      11,
+      12,
+      1,
+      2
+    ],
+    "recommendedTime": "Half day",
+    "costPerPersonINR": 500,
+    "transport": [
+      "Car",
+      "Bike"
+    ],
+    "foodOptions": "limited",
+    "description": "Sunrise trek above the clouds. Check forest department booking rules.",
+    "vegFriendly": true,
+    "image": "images/skandagiri.jpg"
+  },
+  {
+    "id": "shivanasamudra",
+    "name": "Shivanasamudra Falls",
+    "district": "Chamarajanagar",
+    "lat": 12.2975,
+    "lng": 77.165,
+    "interests": [
+      "Waterfalls",
+      "Nature",
+      "Photography"
+    ],
+    "moods": [
+      "Relaxing",
+      "Photography",
+      "Family"
+    ],
+    "bestMonths": [
+      7,
+      8,
+      9,
+      10,
+      11
+    ],
+    "recommendedTime": "One day",
+    "costPerPersonINR": 500,
+    "transport": [
+      "Car",
+      "Bike",
+      "Bus"
+    ],
+    "foodOptions": "easy",
+    "description": "Twin waterfalls on the Kaveri, best after monsoon rains.",
+    "vegFriendly": true,
+    "image": "images/shivanasamudra.jpg"
+  },
+  {
+    "id": "mysuru-palace",
+    "name": "Mysuru Palace",
+    "district": "Mysuru",
+    "lat": 12.3052,
+    "lng": 76.6552,
+    "interests": [
+      "Historical places",
+      "Photography"
+    ],
+    "moods": [
+      "Family",
+      "Photography",
+      "Friends"
+    ],
+    "bestMonths": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ],
+    "recommendedTime": "Half day",
+    "costPerPersonINR": 600,
+    "transport": [
+      "Car",
+      "Bus",
+      "Train"
+    ],
+    "foodOptions": "easy",
+    "description": "Royal palace lit up on Sundays and during Dasara.",
+    "vegFriendly": true,
+    "image": "images/mysuru-palace.jpg"
+  },
+  {
+    "id": "chamundi-hills",
+    "name": "Chamundi Hills",
+    "district": "Mysuru",
+    "lat": 12.2724,
+    "lng": 76.67,
+    "interests": [
+      "Temples",
+      "Mountains",
+      "Photography"
+    ],
+    "moods": [
+      "Relaxing",
+      "Family"
+    ],
+    "bestMonths": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ],
+    "recommendedTime": "Half day",
+    "costPerPersonINR": 400,
+    "transport": [
+      "Car",
+      "Bike",
+      "Bus"
+    ],
+    "foodOptions": "easy",
+    "description": "Hill temple with city views and the Nandi bull statue.",
+    "vegFriendly": true,
+    "image": "images/chamundi-hills.jpg"
+  },
+  {
+    "id": "brindavan-gardens",
+    "name": "Brindavan Gardens",
+    "district": "Mandya",
+    "lat": 12.4244,
+    "lng": 76.5726,
+    "interests": [
+      "Parks",
+      "Photography"
+    ],
+    "moods": [
+      "Family",
+      "Friends",
+      "Relaxing"
+    ],
+    "bestMonths": [
+      10,
+      11,
+      12,
+      1,
+      2
+    ],
+    "recommendedTime": "Half day",
+    "costPerPersonINR": 400,
+    "transport": [
+      "Car",
+      "Bike",
+      "Bus"
+    ],
+    "foodOptions": "easy",
+    "description": "Terraced garden below the KRS dam, known for its evening fountain show.",
+    "vegFriendly": true,
+    "image": "images/brindavan-gardens.jpg"
+  },
+  {
+    "id": "srirangapatna",
+    "name": "Srirangapatna",
+    "district": "Mandya",
+    "lat": 12.4181,
+    "lng": 76.6936,
+    "interests": [
+      "Historical places",
+      "Temples",
+      "Photography"
+    ],
+    "moods": [
+      "Family",
+      "Photography"
+    ],
+    "bestMonths": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ],
+    "recommendedTime": "Half day",
+    "costPerPersonINR": 400,
+    "transport": [
+      "Car",
+      "Bike",
+      "Bus"
+    ],
+    "foodOptions": "easy",
+    "description": "Island town with Tipu Sultan's fort, palace and the Ranganathaswamy temple.",
+    "vegFriendly": true,
+    "image": "images/srirangapatna.jpg"
+  },
+  {
+    "id": "ranganathittu",
+    "name": "Ranganathittu Bird Sanctuary",
+    "district": "Mandya",
+    "lat": 12.42,
+    "lng": 76.66,
+    "interests": [
+      "Wildlife",
+      "Nature",
+      "Photography"
+    ],
+    "moods": [
+      "Relaxing",
+      "Family",
+      "Photography"
+    ],
+    "bestMonths": [
+      11,
+      12,
+      1,
+      2
+    ],
+    "recommendedTime": "Half day",
+    "costPerPersonINR": 500,
+    "transport": [
+      "Car",
+      "Bike"
+    ],
+    "foodOptions": "easy",
+    "description": "River islands with migratory birds; boat rides available.",
+    "vegFriendly": true,
+    "image": "images/ranganathittu.jpg"
+  },
+  {
+    "id": "somanathapura",
+    "name": "Somanathapura Temple",
+    "district": "Mysuru",
+    "lat": 12.2744,
+    "lng": 76.88,
+    "interests": [
+      "Historical places",
+      "Temples",
+      "Photography"
+    ],
+    "moods": [
+      "Photography",
+      "Family"
+    ],
+    "bestMonths": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ],
+    "recommendedTime": "2-3 hours",
+    "costPerPersonINR": 300,
+    "transport": [
+      "Car",
+      "Bike"
+    ],
+    "foodOptions": "limited",
+    "description": "Detailed Hoysala temple with star-shaped plan.",
+    "vegFriendly": true,
+    "image": "images/somanathapura.jpg"
+  },
+  {
+    "id": "shravanabelagola",
+    "name": "Shravanabelagola",
+    "district": "Hassan",
+    "lat": 12.854,
+    "lng": 76.485,
+    "interests": [
+      "Temples",
+      "Historical places"
+    ],
+    "moods": [
+      "Relaxing",
+      "Family"
+    ],
+    "bestMonths": [
+      10,
+      11,
+      12,
+      1,
+      2
+    ],
+    "recommendedTime": "Half day",
+    "costPerPersonINR": 400,
+    "transport": [
+      "Car",
+      "Bike",
+      "Bus"
+    ],
+    "foodOptions": "easy",
+    "description": "Jain pilgrimage site with a monolithic Gommateshwara statue on a hilltop.",
+    "vegFriendly": true,
+    "image": "images/shravanabelagola.jpg"
+  },
+  {
+    "id": "madikeri-coorg",
+    "name": "Madikeri (Coorg)",
+    "district": "Kodagu",
+    "lat": 12.4244,
+    "lng": 75.7382,
+    "interests": [
+      "Nature",
+      "Mountains",
+      "Waterfalls",
+      "Caf\u00e9s",
+      "Photography"
+    ],
+    "moods": [
+      "Relaxing",
+      "Family",
+      "Friends",
+      "Photography"
+    ],
+    "bestMonths": [
+      10,
+      11,
+      12,
+      1,
+      2,
+      3
+    ],
+    "recommendedTime": "Weekend",
+    "costPerPersonINR": 2500,
+    "transport": [
+      "Car",
+      "Bike",
+      "Bus"
+    ],
+    "foodOptions": "easy",
+    "description": "Hill town with coffee estates, waterfalls and misty viewpoints.",
+    "vegFriendly": true,
+    "image": "images/madikeri-coorg.jpg"
+  },
+  {
+    "id": "dubare",
+    "name": "Dubare Elephant Camp",
+    "district": "Kodagu",
+    "lat": 12.3833,
+    "lng": 75.9167,
+    "interests": [
+      "Wildlife",
+      "Nature",
+      "Adventure"
+    ],
+    "moods": [
+      "Family",
+      "Adventure",
+      "Friends"
+    ],
+    "bestMonths": [
+      10,
+      11,
+      12,
+      1,
+      2,
+      3
+    ],
+    "recommendedTime": "One day",
+    "costPerPersonINR": 1000,
+    "transport": [
+      "Car",
+      "Bike"
+    ],
+    "foodOptions": "easy",
+    "description": "Elephant camp on the Kaveri with river activities.",
+    "vegFriendly": true,
+    "image": "images/dubare.jpg"
+  },
+  {
+    "id": "mullayanagiri",
+    "name": "Mullayanagiri",
+    "district": "Chikkamagaluru",
+    "lat": 13.3917,
+    "lng": 75.7217,
+    "interests": [
+      "Mountains",
+      "Nature",
+      "Photography",
+      "Adventure"
+    ],
+    "moods": [
+      "Adventure",
+      "Photography",
+      "Relaxing"
+    ],
+    "bestMonths": [
+      9,
+      10,
+      11,
+      12,
+      1,
+      2
+    ],
+    "recommendedTime": "One day",
+    "costPerPersonINR": 600,
+    "transport": [
+      "Car",
+      "Bike"
+    ],
+    "foodOptions": "easy",
+    "description": "Highest peak in Karnataka; popular sunrise and trekking spot.",
+    "vegFriendly": true,
+    "image": "images/mullayanagiri.jpg"
+  },
+  {
+    "id": "kemmangundi",
+    "name": "Kemmangundi",
+    "district": "Chikkamagaluru",
+    "lat": 13.55,
+    "lng": 75.75,
+    "interests": [
+      "Nature",
+      "Waterfalls",
+      "Mountains",
+      "Photography"
+    ],
+    "moods": [
+      "Relaxing",
+      "Photography",
+      "Family"
+    ],
+    "bestMonths": [
+      9,
+      10,
+      11,
+      12,
+      1,
+      2
+    ],
+    "recommendedTime": "Weekend",
+    "costPerPersonINR": 1500,
+    "transport": [
+      "Car",
+      "Bike"
+    ],
+    "foodOptions": "limited",
+    "description": "Quiet hill station with gardens, falls and viewpoints.",
+    "vegFriendly": true,
+    "image": "images/kemmangundi.jpg"
+  },
+  {
+    "id": "sakleshpur",
+    "name": "Sakleshpur",
+    "district": "Hassan",
+    "lat": 12.9444,
+    "lng": 75.7847,
+    "interests": [
+      "Nature",
+      "Mountains",
+      "Photography",
+      "Adventure"
+    ],
+    "moods": [
+      "Relaxing",
+      "Adventure",
+      "Friends"
+    ],
+    "bestMonths": [
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      1,
+      2
+    ],
+    "recommendedTime": "Weekend",
+    "costPerPersonINR": 2000,
+    "transport": [
+      "Car",
+      "Bike",
+      "Train"
+    ],
+    "foodOptions": "easy",
+    "description": "Green Western Ghats town with plantations, forts and trekking.",
+    "vegFriendly": true,
+    "image": "images/sakleshpur.jpg"
+  },
+  {
+    "id": "kudremukh",
+    "name": "Kudremukh",
+    "district": "Chikkamagaluru",
+    "lat": 13.1333,
+    "lng": 75.25,
+    "interests": [
+      "Mountains",
+      "Nature",
+      "Adventure",
+      "Wildlife"
+    ],
+    "moods": [
+      "Adventure",
+      "Friends"
+    ],
+    "bestMonths": [
+      10,
+      11,
+      12,
+      1,
+      2
+    ],
+    "recommendedTime": "Weekend",
+    "costPerPersonINR": 1800,
+    "transport": [
+      "Car",
+      "Bike"
+    ],
+    "foodOptions": "limited",
+    "description": "Grassy peaks and shola forest; trekking permissions may be required.",
+    "vegFriendly": true,
+    "image": "images/kudremukh.jpg"
+  },
+  {
+    "id": "agumbe",
+    "name": "Agumbe",
+    "district": "Shivamogga",
+    "lat": 13.5033,
+    "lng": 75.0917,
+    "interests": [
+      "Nature",
+      "Waterfalls",
+      "Photography",
+      "Wildlife"
+    ],
+    "moods": [
+      "Relaxing",
+      "Photography",
+      "Adventure"
+    ],
+    "bestMonths": [
+      9,
+      10,
+      11,
+      12,
+      1,
+      2
+    ],
+    "recommendedTime": "Weekend",
+    "costPerPersonINR": 1500,
+    "transport": [
+      "Car",
+      "Bike"
+    ],
+    "foodOptions": "limited",
+    "description": "Rainforest village known for sunsets and small waterfalls.",
+    "vegFriendly": true,
+    "image": "images/agumbe.jpg"
+  },
+  {
+    "id": "hampi",
+    "name": "Hampi",
+    "district": "Vijayanagara",
+    "lat": 15.335,
+    "lng": 76.46,
+    "interests": [
+      "Historical places",
+      "Temples",
+      "Photography",
+      "Caf\u00e9s"
+    ],
+    "moods": [
+      "Photography",
+      "Relaxing",
+      "Friends",
+      "Family"
+    ],
+    "bestMonths": [
+      10,
+      11,
+      12,
+      1,
+      2
+    ],
+    "recommendedTime": "Weekend",
+    "costPerPersonINR": 2500,
+    "transport": [
+      "Car",
+      "Bus",
+      "Train"
+    ],
+    "foodOptions": "easy",
+    "description": "UNESCO ruins of the Vijayanagara empire among boulder hills.",
+    "vegFriendly": true,
+    "image": "images/hampi.jpg"
+  },
+  {
+    "id": "badami",
+    "name": "Badami",
+    "district": "Bagalkot",
+    "lat": 15.9149,
+    "lng": 75.6768,
+    "interests": [
+      "Historical places",
+      "Temples",
+      "Photography"
+    ],
+    "moods": [
+      "Photography",
+      "Family"
+    ],
+    "bestMonths": [
+      10,
+      11,
+      12,
+      1,
+      2
+    ],
+    "recommendedTime": "One day",
+    "costPerPersonINR": 800,
+    "transport": [
+      "Car",
+      "Bike",
+      "Bus"
+    ],
+    "foodOptions": "easy",
+    "description": "Rock-cut cave temples above the Agastya lake.",
+    "vegFriendly": true,
+    "image": "images/badami.jpg"
+  },
+  {
+    "id": "pattadakal",
+    "name": "Pattadakal",
+    "district": "Bagalkot",
+    "lat": 15.9486,
+    "lng": 75.8153,
+    "interests": [
+      "Historical places",
+      "Temples",
+      "Photography"
+    ],
+    "moods": [
+      "Photography",
+      "Family"
+    ],
+    "bestMonths": [
+      10,
+      11,
+      12,
+      1,
+      2
+    ],
+    "recommendedTime": "Half day",
+    "costPerPersonINR": 400,
+    "transport": [
+      "Car",
+      "Bike"
+    ],
+    "foodOptions": "limited",
+    "description": "UNESCO group of Chalukyan temples; combine with Badami and Aihole.",
+    "vegFriendly": true,
+    "image": "images/pattadakal.jpg"
+  },
+  {
+    "id": "gol-gumbaz",
+    "name": "Gol Gumbaz",
+    "district": "Vijayapura",
+    "lat": 16.8302,
+    "lng": 75.735,
+    "interests": [
+      "Historical places",
+      "Photography"
+    ],
+    "moods": [
+      "Family",
+      "Photography"
+    ],
+    "bestMonths": [
+      10,
+      11,
+      12,
+      1,
+      2
+    ],
+    "recommendedTime": "Half day",
+    "costPerPersonINR": 500,
+    "transport": [
+      "Car",
+      "Bus"
+    ],
+    "foodOptions": "easy",
+    "description": "Massive domed mausoleum with a famous whispering gallery.",
+    "vegFriendly": true,
+    "image": "images/gol-gumbaz.jpg"
+  },
+  {
+    "id": "chitradurga-fort",
+    "name": "Chitradurga Fort",
+    "district": "Chitradurga",
+    "lat": 14.2251,
+    "lng": 76.4,
+    "interests": [
+      "Historical places",
+      "Photography",
+      "Adventure"
+    ],
+    "moods": [
+      "Adventure",
+      "Photography",
+      "Family"
+    ],
+    "bestMonths": [
+      10,
+      11,
+      12,
+      1,
+      2
+    ],
+    "recommendedTime": "Half day",
+    "costPerPersonINR": 400,
+    "transport": [
+      "Car",
+      "Bike",
+      "Bus"
+    ],
+    "foodOptions": "easy",
+    "description": "Large stone fort with temples, water tanks and rock hills.",
+    "vegFriendly": true,
+    "image": "images/chitradurga-fort.jpg"
+  },
+  {
+    "id": "gokarna",
+    "name": "Gokarna",
+    "district": "Uttara Kannada",
+    "lat": 14.5479,
+    "lng": 74.3188,
+    "interests": [
+      "Temples",
+      "Nature",
+      "Caf\u00e9s",
+      "Photography",
+      "Adventure"
+    ],
+    "moods": [
+      "Relaxing",
+      "Friends",
+      "Photography"
+    ],
+    "bestMonths": [
+      10,
+      11,
+      12,
+      1,
+      2,
+      3
+    ],
+    "recommendedTime": "Weekend",
+    "costPerPersonINR": 3000,
+    "transport": [
+      "Car",
+      "Bus",
+      "Train"
+    ],
+    "foodOptions": "easy",
+    "description": "Temple town with a string of quiet beaches and cliffside cafes.",
+    "vegFriendly": true,
+    "image": "images/gokarna.jpg"
+  },
+  {
+    "id": "murudeshwar",
+    "name": "Murudeshwar",
+    "district": "Uttara Kannada",
+    "lat": 14.0944,
+    "lng": 74.4849,
+    "interests": [
+      "Temples",
+      "Photography",
+      "Nature"
+    ],
+    "moods": [
+      "Family",
+      "Relaxing",
+      "Photography"
+    ],
+    "bestMonths": [
+      10,
+      11,
+      12,
+      1,
+      2,
+      3
+    ],
+    "recommendedTime": "Half day",
+    "costPerPersonINR": 500,
+    "transport": [
+      "Car",
+      "Bus",
+      "Train"
+    ],
+    "foodOptions": "easy",
+    "description": "Seaside temple with a giant Shiva statue.",
+    "vegFriendly": true,
+    "image": "images/murudeshwar.jpg"
+  },
+  {
+    "id": "udupi",
+    "name": "Udupi",
+    "district": "Udupi",
+    "lat": 13.3409,
+    "lng": 74.7421,
+    "interests": [
+      "Temples",
+      "Food"
+    ],
+    "moods": [
+      "Food",
+      "Family",
+      "Relaxing"
+    ],
+    "bestMonths": [
+      10,
+      11,
+      12,
+      1,
+      2,
+      3
+    ],
+    "recommendedTime": "Half day",
+    "costPerPersonINR": 600,
+    "transport": [
+      "Car",
+      "Bus",
+      "Train"
+    ],
+    "foodOptions": "easy",
+    "description": "Krishna temple town and home of Udupi cuisine.",
+    "vegFriendly": true,
+    "image": "images/udupi.jpg"
+  },
+  {
+    "id": "malpe",
+    "name": "Malpe Beach",
+    "district": "Udupi",
+    "lat": 13.35,
+    "lng": 74.701,
+    "interests": [
+      "Nature",
+      "Adventure",
+      "Food",
+      "Photography"
+    ],
+    "moods": [
+      "Friends",
+      "Family",
+      "Adventure"
+    ],
+    "bestMonths": [
+      10,
+      11,
+      12,
+      1,
+      2,
+      3
+    ],
+    "recommendedTime": "Half day",
+    "costPerPersonINR": 800,
+    "transport": [
+      "Car",
+      "Bike",
+      "Bus"
+    ],
+    "foodOptions": "easy",
+    "description": "Beach with water sports and boats to St Mary's Island.",
+    "vegFriendly": true,
+    "image": "images/malpe.jpg"
+  },
+  {
+    "id": "jog-falls",
+    "name": "Jog Falls",
+    "district": "Shivamogga",
+    "lat": 14.2294,
+    "lng": 74.8125,
+    "interests": [
+      "Waterfalls",
+      "Nature",
+      "Photography"
+    ],
+    "moods": [
+      "Photography",
+      "Family",
+      "Relaxing"
+    ],
+    "bestMonths": [
+      6,
+      7,
+      8,
+      9,
+      10
+    ],
+    "recommendedTime": "One day",
+    "costPerPersonINR": 800,
+    "transport": [
+      "Car",
+      "Bus"
+    ],
+    "foodOptions": "easy",
+    "description": "One of India's highest waterfalls; best during and after monsoon.",
+    "vegFriendly": true,
+    "image": "images/jog-falls.jpg"
+  },
+  {
+    "id": "dandeli",
+    "name": "Dandeli",
+    "district": "Uttara Kannada",
+    "lat": 15.2667,
+    "lng": 74.6167,
+    "interests": [
+      "Adventure",
+      "Wildlife",
+      "Nature",
+      "Waterfalls"
+    ],
+    "moods": [
+      "Adventure",
+      "Friends",
+      "Family"
+    ],
+    "bestMonths": [
+      10,
+      11,
+      12,
+      1,
+      2
+    ],
+    "recommendedTime": "Weekend",
+    "costPerPersonINR": 3000,
+    "transport": [
+      "Car",
+      "Bus"
+    ],
+    "foodOptions": "easy",
+    "description": "Forest region known for river rafting, kayaking and wildlife.",
+    "vegFriendly": true,
+    "image": "images/dandeli.jpg"
+  },
+  {
+    "id": "dharmasthala",
+    "name": "Dharmasthala",
+    "district": "Dakshina Kannada",
+    "lat": 12.9545,
+    "lng": 75.379,
+    "interests": [
+      "Temples"
+    ],
+    "moods": [
+      "Family",
+      "Relaxing"
+    ],
+    "bestMonths": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ],
+    "recommendedTime": "Half day",
+    "costPerPersonINR": 400,
+    "transport": [
+      "Car",
+      "Bike",
+      "Bus"
+    ],
+    "foodOptions": "easy",
+    "description": "Major temple town with free meals for visitors.",
+    "vegFriendly": true,
+    "image": "images/dharmasthala.jpg"
+  },
+  {
+    "id": "belur-halebidu",
+    "name": "Belur and Halebidu",
+    "district": "Hassan",
+    "lat": 13.165,
+    "lng": 75.865,
+    "interests": [
+      "Historical places",
+      "Temples",
+      "Photography"
+    ],
+    "moods": [
+      "Photography",
+      "Family"
+    ],
+    "bestMonths": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ],
+    "recommendedTime": "One day",
+    "costPerPersonINR": 600,
+    "transport": [
+      "Car",
+      "Bike",
+      "Bus"
+    ],
+    "foodOptions": "easy",
+    "description": "Two famous Hoysala temple towns, about 30 km apart.",
+    "vegFriendly": true,
+    "image": "images/belur-halebidu.jpg"
+  },
+  {
+    "id": "kabini",
+    "name": "Kabini",
+    "district": "Mysuru",
+    "lat": 11.98,
+    "lng": 76.35,
+    "interests": [
+      "Wildlife",
+      "Nature",
+      "Photography"
+    ],
+    "moods": [
+      "Relaxing",
+      "Photography",
+      "Family"
+    ],
+    "bestMonths": [
+      10,
+      11,
+      12,
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "recommendedTime": "Weekend",
+    "costPerPersonINR": 4000,
+    "transport": [
+      "Car"
+    ],
+    "foodOptions": "limited",
+    "description": "Backwater forest known for safaris and wildlife sightings.",
+    "vegFriendly": true,
+    "image": "images/kabini.jpg"
+  },
+  {
+    "id": "bandipur",
+    "name": "Bandipur National Park",
+    "district": "Chamarajanagar",
+    "lat": 11.67,
+    "lng": 76.63,
+    "interests": [
+      "Wildlife",
+      "Nature",
+      "Photography"
+    ],
+    "moods": [
+      "Family",
+      "Photography",
+      "Adventure"
+    ],
+    "bestMonths": [
+      10,
+      11,
+      12,
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "recommendedTime": "Weekend",
+    "costPerPersonINR": 2500,
+    "transport": [
+      "Car",
+      "Bus"
+    ],
+    "foodOptions": "limited",
+    "description": "Tiger reserve with jungle safaris.",
+    "vegFriendly": true,
+    "image": "images/bandipur.jpg"
+  }
+];
+
+// Defensive Global Scope Attachments for WebView & Browser Compatibility
+if (typeof window !== "undefined") {
+  window.DESTINATIONS = DESTINATIONS;
+}
+if (typeof globalThis !== "undefined") {
+  globalThis.DESTINATIONS = DESTINATIONS;
+}
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = DESTINATIONS;
+}

@@ -2,7 +2,7 @@
 > **“Your Journey, Your Preferences, Your Perfect Trip.”**  
 > *Discover destinations around Bengaluru and Karnataka that match your time, budget, interests, and travel style.*
 
-[![Android Build](https://img.shields.io/badge/Android%20APK-v1.0.0--debug-brightgreen)](https://files.catbox.moe/12ry8p.apk)
+[![Android Build](https://img.shields.io/badge/Android%20APK-GitHub%20Release-brightgreen)](https://github.com/Nikhilpatil-codes/Travelmate-ai/releases/latest/download/TravelMate-AI-latest.apk)
 [![Target SDK](https://img.shields.io/badge/Android%20SDK-API%2034-blue)](https://developer.android.com)
 [![Python Backend](https://img.shields.io/badge/Backend-FastAPI%20%2B%20SQLite-teal)](https://fastapi.tiangolo.com)
 [![Tests](https://img.shields.io/badge/Tests-20%20Passed-success)](#automated-testing)

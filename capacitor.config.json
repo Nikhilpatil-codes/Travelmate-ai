@@ -1,0 +1,8 @@
+{
+  "appId": "com.travelmate.ai",
+  "appName": "TravelMate AI",
+  "webDir": "android/app/src/main/assets",
+  "server": {
+    "androidScheme": "https"
+  }
+}

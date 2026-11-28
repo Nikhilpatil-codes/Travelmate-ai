@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>TravelMate AI — Discover Your Perfect Trip</title>
+  <script>
+    // Remove or version-bump any service worker or cache that could serve an old copy
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for (var i = 0; i < registrations.length; i++) {
+          registrations[i].unregister();
+        }
+      });
+    }
+    if ('caches' in window) {
+      caches.keys().then(function(keys) {
+        keys.forEach(function(key) { caches.delete(key); });
+      });
+    }
+  </script>
+  <link rel="icon" type="image/png" sizes="32x32" href="images/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="images/favicon-16x16.png">
+  <link rel="shortcut icon" href="favicon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="images/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1C155F">
+  <link rel="stylesheet" href="leaflet/leaflet.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+
+
+  <!-- Top Sticky App Header -->
+  <header class="app-header">
+    <div class="brand-container" onclick="switchView('home')" style="cursor: pointer;">
+      <div class="brand-logo">
+        <img src="images/app_logo.png" alt="TravelMate AI" class="brand-logo-img">
+      </div>
+      <div>
+        <div class="brand-title">TravelMate AI</div>
+        <div id="brand-tagline" style="font-size: 10px; color: var(--text-muted); line-height: 1.1;">Your Journey, Your
+          Preferences</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button id="header-menu-btn" class="header-profile-btn" onclick="openMenuSheet()" title="Settings & Profile">
+        <span id="header-avatar-icon">👤</span>
+        <span id="header-user-name" class="header-user-label">Guest</span>
+        <span style="font-size: 10px; opacity: 0.7;">▾</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main View Container -->
+  <main class="container" id="app-container">
+    <!-- Dynamic Views Rendered by app.js -->
+  </main>
+
+  <!-- Floating AI Assistant Trigger -->
+  <button class="chat-fab" onclick="toggleChat()" title="Ask TravelMate AI">
+    🤖
+  </button>
+
+  <!-- Bottom Fixed Navigation Bar -->
+  <nav class="bottom-nav">
+    <button class="nav-item active" id="nav-home">
+      <span class="nav-icon">🏠</span>
+      <span>Home</span>
+    </button>
+    <button class="nav-item" id="nav-plan">
+      <span class="nav-icon">🧭</span>
+      <span>Plan</span>
+    </button>
+    <button class="nav-item" id="nav-explore">
+      <span class="nav-icon">📍</span>
+      <span>Explore</span>
+    </button>
+    <button class="nav-item" id="nav-saved">
+      <span class="nav-icon">💾</span>
+      <span>Saved</span>
+    </button>
+    <button class="nav-item" id="nav-feedback">
+      <span class="nav-icon">⭐</span>
+      <span>Reviews</span>
+    </button>
+  </nav>
+
+  <!-- AI Chat Assistant Modal -->
+  <div class="modal-overlay" id="chat-modal" style="display: none;">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <h3 style="font-size: 16px; font-weight: 700;">🤖 Ask TravelMate AI</h3>
+        <button class="close-btn" onclick="toggleChat()">✕</button>
+      </div>
+      <div class="chat-messages" id="chat-box">
+        <!-- Messages rendered by app.js -->
+      </div>
+      <!-- Suggestion Chips -->
+      <div class="chat-chips-row" id="chat-suggestion-chips">
+        <button type="button" class="chat-chip" onclick="handleChipClick('Budget')">💰 Budget</button>
+        <button type="button" class="chat-chip" onclick="handleChipClick('Packing')">🎒 Packing</button>
+        <button type="button" class="chat-chip" onclick="handleChipClick('Weather')">⛅ Weather</button>
+        <button type="button" class="chat-chip" onclick="handleChipClick('Best places')">📍 Best places</button>
+      </div>
+      <div class="chat-input-row">
+        <input type="text" id="chat-input" class="form-input" placeholder="Ask about budget, packing, weather..."
+          maxlength="500" onkeypress="if(event.key==='Enter') sendChatMessage()">
+        <button id="chat-send-btn" class="btn-accent" style="width: auto; padding: 0 16px;"
+          onclick="sendChatMessage()">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Authentication & OTP Modal (Step 1: Email & Step 2: 6-Digit OTP) -->
+  <div class="modal-overlay" id="auth-modal" style="display: none;">
+    <div class="modal-sheet">
+      <!-- Step 1: Request OTP -->
+      <div id="auth-step-email">
+        <div class="modal-header">
+          <h3 id="auth-title-step1" style="font-size: 17px; font-weight: 800; display: flex; align-items: center; gap: 8px;"><img src="images/app_logo.png" style="width: 22px; height: 22px; border-radius: 5px;" alt="Logo"> Sign In / Register</h3>
+          <button class="close-btn" onclick="closeAuthModal()">✕</button>
+        </div>
+        <p id="auth-desc-step1" style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
+          Enter your name and email. We will send a 6-digit verification code to your email.
+        </p>
+
+        <!-- Status / Error Alert -->
+        <div id="auth-alert-step1" class="auth-alert error" style="display: none;"></div>
+
+        <div class="form-group">
+          <label class="form-label" id="auth-lbl-name">Full Name</label>
+          <input type="text" id="auth-input-name" class="form-input" placeholder="e.g. Rahul Sharma"
+            autocomplete="name">
+        </div>
+        <div class="form-group">
+          <label class="form-label" id="auth-lbl-email">Email Address</label>
+          <input type="email" id="auth-input-email" class="form-input" placeholder="name@example.com"
+            autocomplete="email" inputmode="email">
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 16px;">
+          <button id="btn-auth-send-otp" class="btn-primary" onclick="handleSendOtp()">
+            <span id="btn-send-otp-text">Send Verification Code</span>
+          </button>
+          <button id="btn-auth-guest" class="btn-secondary" onclick="continueAsGuest()">
+            Continue as Guest
+          </button>
+        </div>
+      </div>
+
+      <!-- Step 2: Verify OTP -->
+      <div id="auth-step-otp" style="display: none;">
+        <div class="modal-header">
+          <button class="btn-link" onclick="switchAuthStep('email')" style="padding: 0; font-size: 13px;">
+            ← Change Email
+          </button>
+          <button class="close-btn" onclick="closeAuthModal()">✕</button>
+        </div>
+
+        <h3 id="auth-title-step2" style="font-size: 17px; font-weight: 800; margin-bottom: 4px;">
+          Verify Email
+        </h3>
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+          We sent a 6-digit numeric verification code to:
+          <br><strong id="auth-target-email-display" style="color: var(--primary-dark); font-size: 13px;"></strong>
+        </p>
+
+        <!-- Status / Error Alert -->
+        <div id="auth-alert-step2" class="auth-alert error" style="display: none;"></div>
+
+        <!-- 6-Digit OTP Boxes with Auto-Advance -->
+        <div class="otp-container" id="otp-input-group">
+          <input type="text" class="otp-box" maxlength="1" inputmode="numeric" pattern="[0-9]*" data-index="0"
+            autocomplete="one-time-code">
+          <input type="text" class="otp-box" maxlength="1" inputmode="numeric" pattern="[0-9]*" data-index="1">
+          <input type="text" class="otp-box" maxlength="1" inputmode="numeric" pattern="[0-9]*" data-index="2">
+          <input type="text" class="otp-box" maxlength="1" inputmode="numeric" pattern="[0-9]*" data-index="3">
+          <input type="text" class="otp-box" maxlength="1" inputmode="numeric" pattern="[0-9]*" data-index="4">
+          <input type="text" class="otp-box" maxlength="1" inputmode="numeric" pattern="[0-9]*" data-index="5">
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <button id="btn-auth-verify-otp" class="btn-primary" onclick="handleVerifyOtp()">
+            <span id="btn-verify-otp-text">Verify & Sign In</span>
+          </button>
+
+          <!-- Resend Cooldown Section -->
+          <div
+            style="display: flex; justify-content: space-between; align-items: center; padding: 6px 2px; margin-top: 4px;">
+            <span id="auth-cooldown-text" style="font-size: 12px; color: var(--text-muted);">
+              Resend code in 60s
+            </span>
+            <button id="btn-auth-resend" class="btn-resend" style="display: none;" onclick="handleResendOtp()">
+              🔄 Resend Code
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Authenticated User Profile Modal -->
+  <div class="modal-overlay" id="profile-modal" style="display: none;">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <h3 id="profile-modal-title" style="font-size: 17px; font-weight: 800;">👤 Traveler Profile</h3>
+        <button class="close-btn" onclick="closeModal('profile-modal')">✕</button>
+      </div>
+
+      <div class="profile-card">
+        <div class="profile-avatar" id="profile-avatar-char">
+            <img src="images/app_logo.png" alt="Profile" style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">
+          </div>
+        <div class="profile-name" id="profile-name-display">Explorer</div>
+        <div class="profile-email" id="profile-email-display">user@example.com</div>
+
+        <div class="profile-badge-row">
+          <span class="verified-pill">✓ Verified Email</span>
+          <span class="provider-pill">Supabase Auth</span>
+        </div>
+
+        <div class="profile-stats-grid">
+          <div class="profile-stat-box">
+            <div class="profile-stat-label">Saved Trips</div>
+            <div class="profile-stat-value" id="profile-saved-count">0</div>
+          </div>
+          <div class="profile-stat-box">
+            <div class="profile-stat-label">Status</div>
+            <div class="profile-stat-value" style="color: var(--primary);">Active Session</div>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <button class="btn-danger" onclick="handleSignOut()">
+            🚪 Sign Out
+          </button>
+          <button class="btn-secondary" onclick="closeModal('profile-modal')">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings & Profile Bottom Sheet Modal -->
+  <div class="modal-overlay" id="menu-modal" style="display: none;">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <h3 style="font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px;"><img src="images/app_logo.png" style="width: 20px; height: 20px; border-radius: 4px;" alt="Logo"> Settings & Account</h3>
+        <button class="close-btn" onclick="closeModal('menu-modal')">✕</button>
+      </div>
+      <div class="menu-sheet-body">
+        <div class="menu-item-row">
+          <div class="menu-item-info">
+            <div class="menu-item-title">🌐 App Language</div>
+            <div class="menu-item-desc">Select your preferred language</div>
+          </div>
+          <select id="lang-selector" class="lang-select" onchange="changeLanguage(this.value)">
+            <option value="en">English</option>
+            <option value="kn">ಕನ್ನಡ</option>
+            <option value="hi">हिन्दी</option>
+            <option value="te">తెలుగు</option>
+            <option value="ta">தமிழ்</option>
+          </select>
+        </div>
+
+        <div class="menu-item-row" onclick="closeModal('menu-modal'); handleMenuAccountClick();"
+          style="cursor: pointer;">
+          <div class="menu-item-info">
+            <div class="menu-item-title" id="menu-account-title">👤 Account & Login</div>
+            <div class="menu-item-desc" id="menu-account-desc">Sign in with Supabase Email OTP</div>
+          </div>
+          <span style="font-size: 14px; color: var(--text-muted);">➔</span>
+        </div>
+
+        <div class="menu-item-row" onclick="closeModal('menu-modal'); openIntelligenceModal();"
+          style="cursor: pointer;">
+          <div class="menu-item-info">
+            <div class="menu-item-title">💡 How It Works</div>
+            <div class="menu-item-desc">Learn about 8-Factor deterministic scoring</div>
+          </div>
+          <span style="font-size: 14px; color: var(--text-muted);">➔</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 8-Factor Intelligence Explanation Bottom Sheet Modal -->
+  <div class="modal-overlay" id="intelligence-modal" style="display: none;">
+    <div class="modal-sheet" style="max-height: 85vh; overflow-y: auto;">
+      <div class="modal-header">
+        <h3 style="font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 8px;"><img src="images/app_logo.png" style="width: 20px; height: 20px; border-radius: 4px;" alt="Logo"> How TravelMate Works</h3>
+        <button class="close-btn" onclick="closeModal('intelligence-modal')">✕</button>
+      </div>
+      <div class="intelligence-content">
+        <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 14px; line-height: 1.5;">
+          TravelMate AI evaluates every Karnataka destination against your real inputs using deterministic
+          multi-criteria decision analysis across 8 weighted factors:
+        </p>
+        <div class="factor-grid-list">
+          <div class="factor-item">
+            <div class="factor-badge" style="background:#dcfce7; color:#166534;">20%</div>
+            <div><strong>Budget Match:</strong> Estimated group cost vs your budget (₹500 - ₹50,000)</div>
+          </div>
+          <div class="factor-item">
+            <div class="factor-badge" style="background:#e0e7ff; color:#3730a3;">20%</div>
+            <div><strong>Interests Alignment:</strong> Direct overlap with destination tags & activities</div>
+          </div>
+          <div class="factor-item">
+            <div class="factor-badge" style="background:#fef3c7; color:#92400e;">15%</div>
+            <div><strong>Available Time:</strong> Recommended duration matched to your trip window</div>
+          </div>
+          <div class="factor-item">
+            <div class="factor-badge" style="background:#fce7f3; color:#9d174d;">15%</div>
+            <div><strong>Travel Mood:</strong> Relaxation, adventure, family, romantic or photography</div>
+          </div>
+          <div class="factor-item">
+            <div class="factor-badge" style="background:#dbeafe; color:#1e40af;">10%</div>
+            <div><strong>Food Preference:</strong> Pure veg dining availability and local food options</div>
+          </div>
+          <div class="factor-item">
+            <div class="factor-badge" style="background:#ffedd5; color:#9a3412;">10%</div>
+            <div><strong>Distance (Haversine):</strong> Strict cutoff filter + proximity bonus</div>
+          </div>
+          <div class="factor-item">
+            <div class="factor-badge" style="background:#f3e8ff; color:#6b21a8;">5%</div>
+            <div><strong>Transportation:</strong> Route accessibility for car, bike, bus, or train</div>
+          </div>
+          <div class="factor-item">
+            <div class="factor-badge" style="background:#ccfbf1; color:#115e59;">5%</div>
+            <div><strong>Travel Period:</strong> Peak season vs off-season best month rating</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Core App Scripts -->
+  <script src="leaflet/leaflet.js"></script>
+  <script src="supabase-config.js"></script>
+  <script src="supabase-auth.js"></script>
+  <script src="translations.js"></script>
+  <script src="destinations.js"></script>
+  <script src="app.js"></script>
+</body>
+
+</html>

@@ -20,7 +20,7 @@ public class WebAppInterface {
 
     @JavascriptInterface
     public String getAppVersion() {
-        return "1.0.0-debug";
+        return "1.0.3";
     }
 
     @JavascriptInterface

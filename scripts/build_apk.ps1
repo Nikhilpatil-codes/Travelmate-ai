@@ -29,36 +29,55 @@ New-Item -ItemType Directory -Force -Path "$buildDir\classes" | Out-Null
 New-Item -ItemType Directory -Force -Path "$buildDir\dex" | Out-Null
 New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
 
-# 2. AAPT2 Compile Resources
-Write-Host "1/6. Compiling Android Resources with AAPT2..."
-& $aapt2 compile --dir "$appDir\src\main\res" -o "$buildDir\compiled_res.zip"
-if ($LASTEXITCODE -ne 0) { throw "AAPT2 compile failed" }
+# 2. Extract and compile AndroidX SplashScreen resources
+$splashAar = "$appDir\libs\core-splashscreen-1.0.1.aar"
+if (-not (Test-Path $splashAar)) { $splashAar = "$PSScriptRoot\..\core-splashscreen-1.0.1.aar" }
+$splashResDir = "$buildDir\splash_res"
+New-Item -ItemType Directory -Force -Path $splashResDir | Out-Null
+tar.exe -xf $splashAar -C $splashResDir res/
+
+Write-Host "1/7. Compiling Android Resources with AAPT2..."
+& $aapt2 compile --dir "$splashResDir\res" -o "$buildDir\splash_res.zip"
+if ($LASTEXITCODE -ne 0) { throw "AAPT2 splash compile failed" }
+
+& $aapt2 compile --dir "$appDir\src\main\res" -o "$buildDir\app_res.zip"
+if ($LASTEXITCODE -ne 0) { throw "AAPT2 app compile failed" }
 
 # 3. AAPT2 Link Resources, Manifest & Assets
-Write-Host "2/6. Linking Resources & Generating R.java..."
+Write-Host "2/7. Linking Resources & Generating R.java..."
 & $aapt2 link -I $platformJar `
     --manifest "$appDir\src\main\AndroidManifest.xml" `
+    --min-sdk-version 24 `
+    --target-sdk-version 34 `
+    --version-code 4 `
+    --version-name "1.0.3" `
     --java "$buildDir\gen" `
+    --extra-packages "androidx.core.splashscreen" `
     -o "$buildDir\packaged_resources.apk" `
     -A "$appDir\src\main\assets" `
-    "$buildDir\compiled_res.zip" `
+    "$buildDir\app_res.zip" `
+    "$buildDir\splash_res.zip" `
     --auto-add-overlay
 if ($LASTEXITCODE -ne 0) { throw "AAPT2 link failed" }
 
 # 4. Java Compilation (javac)
-Write-Host "3/6. Compiling Java Source Files (javac)..."
+Write-Host "3/7. Compiling Java Source Files (javac)..."
+$splashJar = "$appDir\libs\core-splashscreen-1.0.1.jar"
+$kotlinJar = "$appDir\libs\kotlin-stdlib-1.8.22.jar"
+$classpath = "$platformJar;$splashJar;$kotlinJar"
+
 $javaFiles = Get-ChildItem -Path "$appDir\src\main\java", "$buildDir\gen" -Filter "*.java" -Recurse | ForEach-Object { $_.FullName }
-& $javac -encoding UTF-8 -cp $platformJar -d "$buildDir\classes" $javaFiles
+& $javac -encoding UTF-8 -cp $classpath -d "$buildDir\classes" $javaFiles
 if ($LASTEXITCODE -ne 0) { throw "Java compilation failed" }
 
 # 5. D8 Dexing to classes.dex
-Write-Host "4/6. Compiling Bytecode to Dalvik Executable (D8)..."
+Write-Host "4/7. Compiling Bytecode to Dalvik Executable (D8)..."
 $classFiles = Get-ChildItem -Path "$buildDir\classes" -Filter "*.class" -Recurse | ForEach-Object { $_.FullName }
-& $d8 --min-api 24 --lib $platformJar --output "$buildDir\dex" $classFiles
+& $d8 --min-api 24 --lib $platformJar --output "$buildDir\dex" $classFiles $splashJar $kotlinJar
 if ($LASTEXITCODE -ne 0) { throw "D8 dexing failed" }
 
 # 6. Add classes.dex into APK
-Write-Host "5/6. Packaging classes.dex into APK..."
+Write-Host "5/7. Packaging classes.dex into APK..."
 Copy-Item "$buildDir\packaged_resources.apk" "$buildDir\unaligned.apk"
 
 # Using Java's jar tool to update APK with classes.dex cleanly
@@ -66,7 +85,7 @@ Copy-Item "$buildDir\packaged_resources.apk" "$buildDir\unaligned.apk"
 if ($LASTEXITCODE -ne 0) { throw "Packaging classes.dex failed" }
 
 # 7. Zipalign (4-byte alignment)
-Write-Host "6/6. 4-Byte ZipAligning APK..."
+Write-Host "6/7. 4-Byte ZipAligning APK..."
 $alignedApk = "$buildDir\aligned.apk"
 & $zipalign -f -p 4 "$buildDir\unaligned.apk" $alignedApk
 if ($LASTEXITCODE -ne 0) { throw "Zipalign failed" }
@@ -92,9 +111,13 @@ Write-Host "Verifying APK signatures and package integrity..."
 $apkItem = Get-Item $finalApk
 $sha256 = (Get-FileHash -Path $finalApk -Algorithm SHA256).Hash
 
-# Also sync to workspace root artifact
+# Also sync to workspace root artifact and download
 $rootApk = "$PSScriptRoot\..\TravelMate-AI-v1.0.0-debug.apk"
 Copy-Item -Force $finalApk $rootApk
+$downloadApk = "$PSScriptRoot\..\download\TravelMate-AI-v1.0.0-debug.apk"
+if (Test-Path "$PSScriptRoot\..\download") {
+    Copy-Item -Force $finalApk $downloadApk
+}
 
 Write-Host "================================================="
 Write-Host "SUCCESS! DEBUG APK GENERATED SUCCESSFULLY!"

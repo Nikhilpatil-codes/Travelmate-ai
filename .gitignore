@@ -4,6 +4,25 @@
 !.env.example
 *.key
 *.pem
+*.keystore
+*.jks
+
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Android Build Artifacts, Folders & APKs
+*.apk
+*.idsig
+android/build/
+android/app/build/
+android/.gradle/
+android/app/.cxx/
+build/
+*/build/
+.gradle/
+local.properties
+captures/
 
 # Python & Backend
 __pycache__/
@@ -16,15 +35,6 @@ venv/
 .venv/
 env/
 
-# Android Build Artifacts & Caches
-android/app/build/
-android/app/.cxx/
-*.apk
-!TravelMate-AI-v1.0.0-debug.apk
-.gradle/
-local.properties
-captures/
-
 # IDE & Editor caches
 .idea/
 .vscode/
@@ -32,4 +42,3 @@ captures/
 *.swo
 .DS_Store
 Thumbs.db
-

@@ -8,8 +8,8 @@
 // Backend Service URL Configuration for Online Deployment
 // Replace with your live Render backend URL: https://<your-service-name>.onrender.com
 const BACKEND_URL = (typeof window !== "undefined" && window.TRAVELMATE_CONFIG && window.TRAVELMATE_CONFIG.BACKEND_URL)
-  || (typeof localStorage !== "undefined" && localStorage.getItem("travelmate_backend_url"))
-  || "https://travelmate-ai-backend.onrender.com";
+  || (typeof localStorage !== "undefined" && localStorage.getItem("https://travelmate-ai-backend-650h.onrender.com"))
+  || "https://travelmate-ai-khv0.onrender.com";
 
 // Application State
 const state = {
@@ -22,7 +22,13 @@ const state = {
     cooldownTimer: null,
     isSubmitting: false
   },
-  destinations: [],
+  destinations: (typeof DESTINATIONS !== "undefined" && Array.isArray(DESTINATIONS)) ? DESTINATIONS : [],
+  exploreRadius: "all",
+  exploreViewMode: "list", // "list" or "map"
+  exploreCategory: "all",
+  exploreSearchQuery: "",
+  wizardStep: 1, // 1: Where, 2: Budget, 3: Interests, 4: Preferences
+  selectedReviewStars: 5,
   preferences: {
     starting_location: "Bengaluru",
     budget: 4000,
@@ -49,11 +55,11 @@ const state = {
   ]
 };
 
-// Available Travel Moods & Interests
-const ALL_MOODS = ["Relaxing", "Adventure", "Photography", "Food", "Shopping", "Family", "Friends"];
+// Available Travel Moods & Interests (Aligned with DESTINATIONS dataset)
+const ALL_MOODS = ["Relaxing", "Adventure", "Photography", "Family", "Friends", "Spiritual", "Romantic", "Nature"];
 const ALL_INTERESTS = [
-  "Nature", "Mountains", "Waterfalls", "Historical places", "Temples",
-  "Food", "Photography", "Adventure", "Shopping", "Wildlife", "Cafés", "Parks"
+  "Nature", "Mountains", "Photography", "Adventure", "Parks", "Wildlife",
+  "Heritage", "History", "Temples", "Waterfalls", "Beaches", "Architecture"
 ];
 
 // Initialize Application
@@ -62,6 +68,70 @@ document.addEventListener("DOMContentLoaded", async () => {
   setupOtpInputs();
   await loadDestinationsData();
   setupEventListeners();
+
+  // Support direct URL query parameters (e.g. ?guest=1&view=explore)
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("guest") === "1" || params.get("guest") === "true") {
+    sessionStorage.setItem("travelmate_guest_active", "true");
+  }
+  const viewParam = params.get("view");
+  if (viewParam) {
+    state.currentView = viewParam;
+    if (params.get("step")) state.wizardStep = parseInt(params.get("step")) || 1;
+    if (params.get("mode")) state.exploreViewMode = params.get("mode");
+    if (params.get("radius")) state.exploreRadius = parseInt(params.get("radius")) || params.get("radius");
+    if (params.get("budget")) state.preferences.budget = parseInt(params.get("budget"));
+    if (viewParam === "results") {
+      computeLocalRecommendations();
+    }
+    if (viewParam === "saved" && state.savedTrips.length === 0 && state.destinations.length > 0) {
+      const d = state.destinations[0];
+      state.savedTrips.push({
+        id: Date.now(),
+        destination_id: d.id,
+        destination_name: d.name,
+        district: d.district,
+        cost_per_person: d.costPerPersonINR,
+        budget: state.preferences.budget,
+        travel_mode: state.preferences.transportation,
+        date: new Date().toLocaleDateString()
+      });
+      localStorage.setItem("travelmate_saved_trips", JSON.stringify(state.savedTrips));
+    }
+  }
+
+  // Initialize seed reviews if localStorage empty
+  if (!state.feedbacks || state.feedbacks.length === 0) {
+    state.feedbacks = [
+      {
+        id: "fb_1",
+        name: "Ananya Rao",
+        destination: "Nandi Hills",
+        rating: 5,
+        date: "15 Nov 2026",
+        comment: "Spectacular sunrise cloud bed view! The itinerary timings were spot-on."
+      },
+      {
+        id: "fb_2",
+        name: "Karthik Gowda",
+        destination: "Coorg (Madikeri)",
+        rating: 5,
+        date: "10 Nov 2026",
+        comment: "Coffee plantation homestay was peaceful and the Abbey Falls visit matched our adventure mood."
+      },
+      {
+        id: "fb_3",
+        name: "Sneha Patil",
+        destination: "Hampi",
+        rating: 4,
+        date: "2 Nov 2026",
+        comment: "Incredible historical stone architecture. The sunset from Hemakuta hill was magical."
+      }
+    ];
+    localStorage.setItem("travelmate_feedbacks", JSON.stringify(state.feedbacks));
+  }
+
+  // Startup flow handled natively with smooth zoom animation
 
   // Cryptographically restore and verify session via Supabase Auth
   if (window.TravelMateAuth) {
@@ -106,15 +176,125 @@ function changeLanguage(newLang) {
   renderApp();
 }
 
-// Load Dest Dataset
-async function loadDestinationsData() {
-  try {
-    const res = await fetch("destinations.json");
-    state.destinations = await res.json();
-    console.log(`Loaded ${state.destinations.length} destinations.`);
-  } catch (err) {
-    console.warn("Falling back to local static dataset", err);
+// Load Dest Dataset (Single Source of Truth: DESTINATIONS)
+function loadDestinationsData() {
+  let loaded = null;
+  if (typeof DESTINATIONS !== "undefined" && Array.isArray(DESTINATIONS) && DESTINATIONS.length > 0) {
+    loaded = DESTINATIONS;
+  } else if (typeof window !== "undefined" && window.DESTINATIONS && Array.isArray(window.DESTINATIONS) && window.DESTINATIONS.length > 0) {
+    loaded = window.DESTINATIONS;
+  } else if (typeof globalThis !== "undefined" && globalThis.DESTINATIONS && Array.isArray(globalThis.DESTINATIONS) && globalThis.DESTINATIONS.length > 0) {
+    loaded = globalThis.DESTINATIONS;
   }
+
+  if (loaded && loaded.length > 0) {
+    state.destinations = loaded;
+    console.log(`[TravelMate] Successfully loaded ${state.destinations.length} destinations directly from bundled DESTINATIONS dataset.`);
+  } else {
+    console.error("[TravelMate] CRITICAL: DESTINATIONS array not found or 0 loaded!");
+    state.destinations = [];
+  }
+}
+
+// Karnataka Reference Cities for Haversine Distance
+const CITY_COORDINATES = {
+  "bengaluru": { lat: 12.9716, lng: 77.5946 },
+  "bangalore": { lat: 12.9716, lng: 77.5946 },
+  "mysuru": { lat: 12.2958, lng: 76.6394 },
+  "mysore": { lat: 12.2958, lng: 76.6394 },
+  "mangaluru": { lat: 12.9141, lng: 74.8560 },
+  "mangalore": { lat: 12.9141, lng: 74.8560 },
+  "hubballi": { lat: 15.3647, lng: 75.1240 },
+  "hubli": { lat: 15.3647, lng: 75.1240 },
+  "belagavi": { lat: 15.8497, lng: 74.4977 },
+  "belgaum": { lat: 15.8497, lng: 74.4977 },
+  "shivamogga": { lat: 13.9299, lng: 75.5681 },
+  "shimoga": { lat: 13.9299, lng: 75.5681 },
+  "hassan": { lat: 13.0033, lng: 76.1004 },
+  "udupi": { lat: 13.3409, lng: 74.7421 },
+  "chikkamagaluru": { lat: 13.3161, lng: 75.7720 },
+  "chikmagalur": { lat: 13.3161, lng: 75.7720 }
+};
+
+// Haversine formula to compute great-circle distance in kilometers
+function haversineDistanceKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c);
+}
+
+function getOriginCoords() {
+  if (state.preferences.has_custom_loc) {
+    return { lat: state.preferences.user_lat, lng: state.preferences.user_lon };
+  }
+  const cityKey = (state.preferences.starting_location || "").trim().toLowerCase();
+  return CITY_COORDINATES[cityKey] || { lat: 12.9716, lng: 77.5946 };
+}
+
+function getDestinationDistance(d) {
+  if (!d || typeof d.lat !== "number" || typeof d.lng !== "number") return 0;
+  const origin = getOriginCoords();
+  return haversineDistanceKm(origin.lat, origin.lng, d.lat, d.lng);
+}
+
+function formatBestMonths(months) {
+  if (!months || !months.length) return "Year-round";
+  if (months.length === 12) return "Year-round";
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return months.map(m => monthNames[m - 1]).join(", ");
+}
+
+// Clean coloured category / initial placeholder SVG (Never broken icon)
+function getDestPlaceholderSvg(name, interests = []) {
+  const letter = (name || "T").charAt(0).toUpperCase();
+  let icon = "📍";
+  const tags = (interests || []).join(" ").toLowerCase();
+  if (tags.includes("mountain") || tags.includes("hill") || tags.includes("trek")) icon = "⛰️";
+  else if (tags.includes("waterfall") || tags.includes("beach") || tags.includes("lake") || tags.includes("river")) icon = "🌊";
+  else if (tags.includes("wildlife") || tags.includes("safari")) icon = "🐅";
+  else if (tags.includes("temple") || tags.includes("heritage") || tags.includes("historical")) icon = "🏛️";
+  else if (tags.includes("park") || tags.includes("garden") || tags.includes("nature")) icon = "🌿";
+  else if (tags.includes("palace") || tags.includes("fort")) icon = "🏰";
+
+  const gradients = [
+    ["#065f46", "#10b981"],
+    ["#1e40af", "#3b82f6"],
+    ["#9a3412", "#f97316"],
+    ["#6b21a8", "#a855f7"],
+    ["#0f766e", "#14b8a6"],
+    ["#854d0e", "#eab308"]
+  ];
+  const pair = gradients[letter.charCodeAt(0) % gradients.length];
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="260" viewBox="0 0 400 260">
+    <defs>
+      <linearGradient id="g_${letter}" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="${pair[0]}"/>
+        <stop offset="100%" stop-color="${pair[1]}"/>
+      </linearGradient>
+    </defs>
+    <rect width="100%" height="100%" fill="url(#g_${letter})"/>
+    <circle cx="200" cy="100" r="50" fill="rgba(255,255,255,0.18)"/>
+    <text x="200" y="110" font-size="44" text-anchor="middle" dominant-baseline="middle">${icon}</text>
+    <text x="200" y="175" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="19" font-weight="700" fill="#ffffff" text-anchor="middle">${name}</text>
+    <text x="200" y="205" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" fill="rgba(255,255,255,0.85)" text-anchor="middle">Karnataka, India</text>
+  </svg>`;
+  return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+}
+
+function handleImageError(imgEl, destId) {
+  if (!imgEl) return;
+  imgEl.onerror = null;
+  const d = state.destinations.find(x => String(x.id) === String(destId));
+  const name = d ? d.name : "Karnataka";
+  const interests = d ? (d.interests || []) : [];
+  imgEl.src = getDestPlaceholderSvg(name, interests);
 }
 
 // --- Deterministic 8-Factor Recommendation Scoring ---
@@ -131,66 +311,136 @@ function computeLocalRecommendations() {
     season: 0.05
   };
 
+  const timeHoursMap = {
+    "2-3 hours": 3,
+    "Half day": 6,
+    "One day": 14,
+    "Weekend": 48
+  };
+
+  const periodMonthsMap = {
+    "January-March": [1, 2, 3],
+    "April-June": [4, 5, 6],
+    "July-September": [7, 8, 9],
+    "October-December": [10, 11, 12],
+    "Flexible dates": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+  };
+
   const scored = [];
 
   for (const d of state.destinations) {
-    // 1. Distance Exclusion Filter
-    const destDist = parseFloat(d.distance_km);
+    // 1. Distance Calculation & Max Distance Filter
+    const destDist = getDestinationDistance(d);
     if (destDist > p.max_distance) {
-      continue; // Strict exclusion
+      continue; // Strict filter on Max Distance
     }
+    const distScore = Math.max(30, Math.round(100 - (destDist / p.max_distance) * 50));
+    const distReason = `${destDist} km away (within your ${p.max_distance} km limit)`;
 
-    // Distance Score (closer gets convenience bonus)
-    const distScore = Math.max(50, 100 - (destDist / p.max_distance) * 30);
-
-    // 2. Budget Score
-    const estGroupCost = parseFloat(d.average_cost_per_person) * p.travelers;
+    // 2. Budget Score (costPerPersonINR x travelers vs budget)
+    const estGroupCost = (d.costPerPersonINR || 500) * p.travelers;
     let budgetScore = 100;
-    let budgetReason = `Comfortably fits target budget (est. ₹${Math.round(estGroupCost)} for ${p.travelers} travelers)`;
-    const budgetRatio = estGroupCost / p.budget;
-    if (budgetRatio > 1.0) {
-      budgetScore = Math.max(20, 100 - (budgetRatio - 1.0) * 120);
-      budgetReason = `Slightly exceeds budget by ₹${Math.round(estGroupCost - p.budget)}`;
+    let budgetReason = `Comfortably fits budget: ₹${estGroupCost} for ${p.travelers} traveler${p.travelers > 1 ? "s" : ""} (₹${d.costPerPersonINR}/person)`;
+    if (estGroupCost > p.budget) {
+      const overRatio = estGroupCost / p.budget;
+      budgetScore = Math.max(10, Math.round(100 - (overRatio - 1.0) * 100));
+      budgetReason = `Exceeds budget by ₹${estGroupCost - p.budget} (Total est. ₹${estGroupCost})`;
+    } else if (p.budget - estGroupCost > p.budget * 0.4) {
+      budgetReason = `Budget-friendly: ₹${estGroupCost} vs ₹${p.budget} limit`;
     }
 
-    // 3. Interest Matching Score
-    const dInterests = (d.interests + "," + d.activities).toLowerCase();
-    const matched = p.interests.filter(i => dInterests.includes(i.toLowerCase()));
-    const interestScore = p.interests.length ? (matched.length / p.interests.length) * 100 : 70;
+    // 3. Interests Score (matched to d.interests)
+    const dInterests = Array.isArray(d.interests) ? d.interests : [];
+    let matchedInterests = [];
+    let interestScore = 75;
+    let interestReason = "Scenic local experience";
+    if (p.interests && p.interests.length > 0) {
+      matchedInterests = p.interests.filter(userInt =>
+        dInterests.some(di => di.toLowerCase().includes(userInt.toLowerCase()) || userInt.toLowerCase().includes(di.toLowerCase()))
+      );
+      interestScore = Math.round((matchedInterests.length / p.interests.length) * 100);
+      if (matchedInterests.length > 0) {
+        interestReason = `Matches interests: ${matchedInterests.slice(0, 3).join(", ")}`;
+      } else {
+        interestScore = 30;
+        interestReason = `Features ${dInterests.slice(0, 2).join(", ")}`;
+      }
+    }
 
-    // 4. Time Feasibility
-    const travelTime = parseFloat(d.travel_time_hours);
-    const recDuration = parseFloat(d.recommended_duration_hours);
-    const timeLimits = { "2-3 hours": 3, "Half day": 6, "One day": 14, "Weekend": 48 };
-    const maxHours = timeLimits[p.available_time] || 14;
-    const totalNeeded = (travelTime * 2) + Math.min(recDuration, maxHours * 0.5);
+    // 4. Available Time Score (recommendedTime vs available_time)
+    const userHours = timeHoursMap[p.available_time] || 14;
+    const destHours = timeHoursMap[d.recommendedTime] || 14;
     let timeScore = 100;
-    let timeReason = `Round-trip travel (~${(travelTime * 2).toFixed(1)} hrs) easily fits within ${p.available_time}`;
-    if (totalNeeded > maxHours) {
-      timeScore = Math.max(10, 100 - (totalNeeded - maxHours) * 15);
-      timeReason = `Requires ~${totalNeeded.toFixed(1)} hrs total, optimal for extended outing`;
+    let timeReason = `Recommended duration (${d.recommendedTime}) aligns with your ${p.available_time} window`;
+    if (d.recommendedTime === p.available_time) {
+      timeScore = 100;
+    } else if (destHours <= userHours) {
+      timeScore = 90;
+      timeReason = `Comfortably completed (${d.recommendedTime}) in ${p.available_time}`;
+    } else {
+      timeScore = Math.max(20, Math.round(100 - ((destHours - userHours) / destHours) * 80));
+      timeReason = `Recommended for ${d.recommendedTime}, slightly exceeds ${p.available_time}`;
     }
 
-    // 5. Mood Score
-    const moodScore = (d.mood_compatibility || "").toLowerCase().includes(p.travel_mood.toLowerCase()) ? 100 : 40;
+    // 5. Travel Mood Score (moods vs travel_mood)
+    const dMoods = Array.isArray(d.moods) ? d.moods : [];
+    const moodMatch = dMoods.some(m => m.toLowerCase() === p.travel_mood.toLowerCase());
+    const moodScore = moodMatch ? 100 : 40;
+    const moodReason = moodMatch
+      ? `Ideal match for a ${p.travel_mood.toLowerCase()} mood`
+      : `Atmosphere leans towards ${dMoods.slice(0, 2).join(" & ") || "Scenic"}`;
 
-    // 6. Food Score
+    // 6. Food Preference Score (vegFriendly & foodOptions)
     let foodScore = 80;
-    if (p.food_preference !== "No preference") {
-      foodScore = (d.dietary_availability || "").toLowerCase().includes(p.food_preference.toLowerCase()) ? 100 : 40;
+    let foodReason = "Food readily available";
+    const isVegUser = ["Vegetarian", "Vegan", "Jain"].includes(p.food_preference);
+    if (isVegUser) {
+      if (d.vegFriendly) {
+        foodScore = d.foodOptions === "easy" ? 100 : 85;
+        foodReason = `Vegetarian-friendly with ${d.foodOptions} food options`;
+      } else {
+        foodScore = d.foodOptions === "easy" ? 55 : 30;
+        foodReason = `Limited dedicated vegetarian options (${d.foodOptions})`;
+      }
+    } else {
+      foodScore = d.foodOptions === "easy" ? 100 : 75;
+      foodReason = d.foodOptions === "easy" ? "Abundant local dining options nearby" : "Limited dining nearby, carry snacks";
     }
 
-    // 7. Transportation Score
-    const transScore = (d.transport_options || "").toLowerCase().includes(p.transportation.toLowerCase()) ? 100 : 50;
+    // 7. Transport Score (transport vs transportation)
+    const dTransport = Array.isArray(d.transport) ? d.transport : [];
+    let transMatch = dTransport.some(t => t.toLowerCase() === p.transportation.toLowerCase());
+    if (!transMatch && p.transportation === "Public transport") {
+      transMatch = dTransport.some(t => ["bus", "train"].includes(t.toLowerCase()));
+    }
+    if (!transMatch && p.transportation === "Cab") {
+      transMatch = dTransport.some(t => t.toLowerCase() === "car");
+    }
+    const transScore = transMatch ? 100 : 50;
+    const transReason = transMatch
+      ? `Easily accessible via ${p.transportation}`
+      : `Best reached via ${dTransport.join(" or ") || "private vehicle"}`;
 
-    // 8. Seasonal Suitability
-    let seasonScore = 85;
-    let seasonReason = `Optimal season: ${d.best_season}`;
-    if (p.travel_period !== "Flexible dates") {
-      seasonScore = (d.best_months || "").includes(p.travel_period.split("-")[0]) ? 100 : 55;
+    // 8. Travel Period / Season Score (bestMonths vs travel_period)
+    const targetMonths = periodMonthsMap[p.travel_period] || [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+    const dMonths = Array.isArray(d.bestMonths) ? d.bestMonths : [];
+    let seasonScore = 90;
+    let seasonReason = `Optimal season: ${formatBestMonths(dMonths)}`;
+    if (p.travel_period === "Flexible dates") {
+      seasonScore = 95;
+      seasonReason = `Flexible dates: prime months are ${formatBestMonths(dMonths)}`;
+    } else {
+      const overlap = targetMonths.filter(m => dMonths.includes(m));
+      if (overlap.length > 0) {
+        seasonScore = 100;
+        seasonReason = `Peak season in ${p.travel_period} (${formatBestMonths(overlap)})`;
+      } else {
+        seasonScore = 40;
+        seasonReason = `Off-peak in ${p.travel_period} (best: ${formatBestMonths(dMonths)})`;
+      }
     }
 
-    // Overall Score (0-100)
+    // Weighted Overall Score
     const overallScore = Math.round(
       budgetScore * WEIGHTS.budget +
       interestScore * WEIGHTS.interests +
@@ -202,16 +452,14 @@ function computeLocalRecommendations() {
       seasonScore * WEIGHTS.season
     );
 
-    // Build 2-4 Explainable Reasons
-    const explanations = [];
-    if (matched.length) {
-      explanations.push(`Matches your interest in ${matched.slice(0, 3).join(", ")}`);
-    }
-    explanations.push(budgetReason);
-    explanations.push(timeReason);
-    if (moodScore === 100) {
-      explanations.push(`Ideal environment for a ${p.travel_mood.toLowerCase()} getaway`);
-    }
+    const explanations = [
+      budgetReason,
+      interestReason,
+      distReason,
+      moodReason
+    ];
+
+    const estTravelHours = (destDist / 45).toFixed(1);
 
     scored.push({
       destination: d,
@@ -226,20 +474,20 @@ function computeLocalRecommendations() {
         transportation: Math.round(transScore),
         season: Math.round(seasonScore)
       },
-      estimated_group_cost: Math.round(estGroupCost),
-      cost_per_person: Math.round(estGroupCost / p.travelers),
-      estimated_travel_time_hours: travelTime,
-      total_trip_duration_hours: Math.round(totalNeeded * 10) / 10,
-      matched_interests: matched,
-      explanations: explanations.slice(0, 4)
+      distance_km: destDist,
+      estimated_group_cost: estGroupCost,
+      cost_per_person: d.costPerPersonINR,
+      estimated_travel_time_hours: estTravelHours,
+      matched_interests: matchedInterests,
+      explanations: explanations
     });
   }
 
-  // Deterministic Ranking: score DESC, distance ASC, id ASC
+  // Deterministic Ranking: score DESC, distance ASC, name ASC
   scored.sort((a, b) => {
     if (b.overall_score !== a.overall_score) return b.overall_score - a.overall_score;
-    if (a.destination.distance_km !== b.destination.distance_km) return a.destination.distance_km - b.destination.distance_km;
-    return a.destination.id - b.destination.id;
+    if (a.distance_km !== b.distance_km) return a.distance_km - b.distance_km;
+    return a.destination.name.localeCompare(b.destination.name);
   });
 
   state.recommendations = scored.slice(0, 3);
@@ -248,10 +496,10 @@ function computeLocalRecommendations() {
 // --- Itinerary Scheduling ---
 function generateItineraryForDestination(dest) {
   const p = state.preferences;
-  const travelTime = parseFloat(dest.travel_time_hours);
-  const recDuration = parseFloat(dest.recommended_duration_hours);
-  const activities = (dest.activities || "").split(",").map(s => s.trim());
-  const localFood = dest.local_food || "Fresh South Indian tiffin & Filter Kaapi";
+  const dist = getDestinationDistance(dest);
+  const travelTime = Math.max(0.5, (dist / 45));
+  const activities = Array.isArray(dest.interests) ? dest.interests : ["Sightseeing", "Nature walk"];
+  const localFood = dest.foodOptions === "easy" ? "Authentic local Karnataka cuisine & Filter Coffee" : "Regional snack & packed meal";
 
   const roundTrip = travelTime * 2;
   const timeLimits = { "2-3 hours": 3, "Half day": 6, "One day": 14, "Weekend": 48 };
@@ -261,25 +509,25 @@ function generateItineraryForDestination(dest) {
   const timeline = [];
 
   if (p.available_time.includes("2-3")) {
-    timeline.push({ time: "06:30 AM", title: `Departure from ${p.starting_location}`, desc: `Drive via ${p.transportation}`, type: "travel" });
-    timeline.push({ time: "07:45 AM", title: `Arrive at ${dest.name}`, desc: activities[0] || "Explore scenic views", type: "activity" });
+    timeline.push({ time: "06:30 AM", title: `Departure from ${p.starting_location}`, desc: `Drive via ${p.transportation} (~${dist} km)`, type: "travel" });
+    timeline.push({ time: "07:45 AM", title: `Arrive at ${dest.name}`, desc: `${activities[0] || "Explore scenic views"} in ${dest.district}`, type: "activity" });
     timeline.push({ time: "08:45 AM", title: "Return Journey", desc: `Drive back to ${p.starting_location}`, type: "travel" });
     timeline.push({ time: "10:00 AM", title: "Trip Complete", desc: "Arrived home refreshed", type: "finish" });
   } else if (p.available_time === "Weekend") {
-    timeline.push({ time: "Day 1 - 06:00 AM", title: `Highway Departure from ${p.starting_location}`, desc: `Morning drive via ${p.transportation}`, type: "travel" });
-    timeline.push({ time: "Day 1 - 10:30 AM", title: `Check-in & Breakfast at ${dest.name}`, desc: `Savor ${localFood}`, type: "food" });
-    timeline.push({ time: "Day 1 - 01:00 PM", title: `Major Sightseeing: ${activities[0] || "Trail"}`, desc: "Prime exploration", type: "activity" });
-    timeline.push({ time: "Day 1 - 05:00 PM", title: "Sunset Point & Local Bazaar", desc: "Photography and leisure", type: "leisure" });
-    timeline.push({ time: "Day 2 - 07:00 AM", title: `Sunrise Trek: ${activities[1] || "Panoramic View"}`, desc: "Fresh morning breeze", type: "activity" });
-    timeline.push({ time: "Day 2 - 02:00 PM", title: "Return Highway Journey", desc: `Head back to ${p.starting_location}`, type: "travel" });
+    timeline.push({ time: "Day 1 - 06:00 AM", title: `Highway Departure from ${p.starting_location}`, desc: `Morning drive via ${p.transportation} to ${dest.district}`, type: "travel" });
+    timeline.push({ time: "Day 1 - 10:30 AM", title: `Check-in & Refreshments at ${dest.name}`, desc: `Savor ${localFood}`, type: "food" });
+    timeline.push({ time: "Day 1 - 01:00 PM", title: `Major Sightseeing: ${activities[0] || "Exploration"}`, desc: dest.description, type: "activity" });
+    timeline.push({ time: "Day 1 - 05:00 PM", title: "Sunset Point & Photography", desc: "Scenic vantage point and leisure time", type: "leisure" });
+    timeline.push({ time: "Day 2 - 07:00 AM", title: `Morning Experience: ${activities[1] || "Nature walk"}`, desc: "Fresh morning atmosphere", type: "activity" });
+    timeline.push({ time: "Day 2 - 02:00 PM", title: "Return Journey", desc: `Head back to ${p.starting_location}`, type: "travel" });
   } else {
-    // Standard One-Day Schedule
-    timeline.push({ time: "06:00 AM", title: `Departure from ${p.starting_location}`, desc: `Beat the city traffic via ${p.transportation}`, type: "travel" });
-    timeline.push({ time: "08:00 AM", title: `Arrival & Breakfast at ${dest.name}`, desc: `Enjoy authentic ${localFood}`, type: "food" });
-    timeline.push({ time: "09:30 AM", title: `Primary Highlight: ${activities[0] || "Sightseeing"}`, desc: "Morning exploration while weather is cool", type: "activity" });
-    timeline.push({ time: "01:00 PM", title: "Traditional Lunch", desc: `Nutritious lunch suited for ${p.food_preference}`, type: "food" });
-    timeline.push({ time: "02:30 PM", title: `Secondary Activity: ${activities[1] || "Nature walk"}`, desc: "Photography and heritage exploration", type: "activity" });
-    timeline.push({ time: "05:00 PM", title: "Evening Sunset & Tea", desc: "Unwind with regional snacks", type: "leisure" });
+    // Standard One-Day or Half-Day Schedule
+    timeline.push({ time: "06:00 AM", title: `Departure from ${p.starting_location}`, desc: `Beat highway traffic via ${p.transportation} (~${dist} km)`, type: "travel" });
+    timeline.push({ time: "08:15 AM", title: `Arrival & Breakfast at ${dest.name}`, desc: `Enjoy authentic ${localFood}`, type: "food" });
+    timeline.push({ time: "09:30 AM", title: `Primary Highlight: ${activities[0] || "Exploration"}`, desc: dest.description, type: "activity" });
+    timeline.push({ time: "01:00 PM", title: "Traditional Lunch", desc: `Lunch in ${dest.district} (${dest.vegFriendly ? 'Pure veg available' : 'Regional dining'})`, type: "food" });
+    timeline.push({ time: "02:30 PM", title: `Secondary Activity: ${activities[1] || "Photography & heritage walk"}`, desc: "Leisure sightseeing", type: "activity" });
+    timeline.push({ time: "05:00 PM", title: "Sunset & Evening Tea", desc: "Unwind with local snacks and scenic views", type: "leisure" });
     timeline.push({ time: "06:00 PM", title: `Return Drive to ${p.starting_location}`, desc: "Comfortable drive back home", type: "travel" });
   }
 
@@ -289,9 +537,9 @@ function generateItineraryForDestination(dest) {
 // --- Budget Calculator & Optimizer ---
 function calculateDetailedBudget(dest, transportMode = state.preferences.transportation, isOptimized = false) {
   const p = state.preferences;
-  const dist = parseFloat(dest.distance_km);
+  const dist = getDestinationDistance(dest);
   const roundTrip = dist * 2;
-  const fee = parseFloat(dest.entry_fee_estimate || 0);
+  const baseCost = dest.costPerPersonINR || 500;
 
   const rates = {
     "Bike": 2.5,
@@ -306,19 +554,18 @@ function calculateDetailedBudget(dest, transportMode = state.preferences.transpo
   const rate = rates[transportMode] || 7.0;
 
   const transportCost = isPerPerson ? (roundTrip * rate * p.travelers) : (roundTrip * rate + 150);
-  const foodPerPerson = isOptimized ? 250 : 450;
+  const foodPerPerson = isOptimized ? 250 : (dest.foodOptions === "easy" ? 400 : 250);
   const foodCost = foodPerPerson * p.travelers;
-  const entryCost = fee * p.travelers;
-  const activityCost = (isOptimized ? 80 : 150) * p.travelers;
-  const miscCost = 200;
+  const activityCost = (isOptimized ? Math.round(baseCost * 0.7) : baseCost) * p.travelers;
+  const miscCost = 150;
 
-  const total = Math.round(transportCost + foodCost + entryCost + activityCost + miscCost);
+  const total = Math.round(transportCost + foodCost + activityCost + miscCost);
   const perPerson = Math.round(total / p.travelers);
 
   return {
     transportCost: Math.round(transportCost),
     foodCost: Math.round(foodCost),
-    entryCost: Math.round(entryCost),
+    entryCost: Math.round(activityCost),
     activityCost: Math.round(activityCost),
     miscCost: Math.round(miscCost),
     totalGroupCost: total,
@@ -330,11 +577,12 @@ function calculateDetailedBudget(dest, transportMode = state.preferences.transpo
 
 // --- Navigation & Routing Helpers ---
 function openGoogleMapsDirections(dest) {
+  if (!dest) return;
   const origin = state.preferences.has_custom_loc
     ? `${state.preferences.user_lat},${state.preferences.user_lon}`
     : encodeURIComponent(state.preferences.starting_location);
 
-  const destination = `${dest.latitude},${dest.longitude}`;
+  const destination = `${dest.lat},${dest.lng}`;
   const mode = state.preferences.transportation.toLowerCase() === "bike" ? "bicycling" : "driving";
   const url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=${mode}`;
 
@@ -360,7 +608,7 @@ function useCurrentLocation() {
         state.preferences.user_lat = pos.coords.latitude;
         state.preferences.user_lon = pos.coords.longitude;
         state.preferences.has_custom_loc = true;
-        state.preferences.starting_location = `Current GPS (${pos.coords.latitude.toFixed(3)}, ${pos.coords.longitude.toFixed(3)})`;
+        state.preferences.starting_location = `GPS Location (${pos.coords.latitude.toFixed(3)}, ${pos.coords.longitude.toFixed(3)})`;
         if (btn) btn.innerHTML = "✓ Location Detected";
         renderApp();
       },
@@ -402,8 +650,31 @@ function renderApp() {
   const container = document.getElementById("app-container");
   if (!container) return;
 
-  // Update header labels
-  document.getElementById("brand-tagline").textContent = t("tagline");
+  // View transition animation
+  container.className = "container view-animated";
+
+  // Sync active navigation item with currentView
+  document.querySelectorAll(".nav-item").forEach(item => item.classList.remove("active"));
+  const currentNav = document.getElementById(`nav-${state.currentView}`);
+  if (currentNav) currentNav.classList.add("active");
+
+  // Update unified header labels
+  const userNameEl = document.getElementById("header-user-name");
+  const avatarIconEl = document.getElementById("header-avatar-icon");
+  if (userNameEl) {
+    if (state.currentUser) {
+      userNameEl.textContent = state.currentUser.name || "Explorer";
+      if (avatarIconEl) avatarIconEl.textContent = "⭐";
+    } else {
+      userNameEl.textContent = "Guest";
+      if (avatarIconEl) avatarIconEl.textContent = "👤";
+    }
+  }
+
+  // Legacy header compatibility
+  const brandTag = document.getElementById("brand-tagline");
+  if (brandTag) brandTag.textContent = t("tagline");
+
   const userBtn = document.getElementById("header-user-btn");
   if (userBtn) {
     if (state.currentUser) {
@@ -434,6 +705,9 @@ function renderApp() {
       break;
     case "explore":
       container.innerHTML = renderExploreView();
+      if (state.exploreViewMode === "map") {
+        setTimeout(initExploreMap, 60);
+      }
       break;
     case "saved":
       container.innerHTML = renderSavedTripsView();
@@ -446,159 +720,367 @@ function renderApp() {
   }
 }
 
+// Header Menu & Modal Helpers
+function openMenuSheet() {
+  const modal = document.getElementById("menu-modal");
+  if (modal) modal.style.display = "flex";
+  const accTitle = document.getElementById("menu-account-title");
+  const accDesc = document.getElementById("menu-account-desc");
+  if (state.currentUser) {
+    if (accTitle) accTitle.textContent = `👤 ${state.currentUser.name} (Verified)`;
+    if (accDesc) accDesc.textContent = state.currentUser.email;
+  } else {
+    if (accTitle) accTitle.textContent = "👤 Sign In / Register";
+    if (accDesc) accDesc.textContent = "Sign in with Supabase Email OTP";
+  }
+}
+
+function handleMenuAccountClick() {
+  if (state.currentUser) {
+    openModal("profile-modal");
+  } else {
+    openAuthModal("email");
+  }
+}
+
+function openIntelligenceModal() {
+  const modal = document.getElementById("intelligence-modal");
+  if (modal) modal.style.display = "flex";
+}
+
 // 1. Home View
 function renderHomeView() {
+  const escapes = state.destinations.slice(0, 6);
+  const currMonth = new Date().getMonth() + 1;
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const currMonthName = monthNames[currMonth - 1];
+
+  // Trending this season destinations
+  const trending = state.destinations.filter(d => Array.isArray(d.bestMonths) && d.bestMonths.includes(currMonth)).slice(0, 8);
+
   return `
-    <div class="hero-card">
-      <div class="hero-tag">AI-Powered Weekend & Day Trips</div>
-      <h1 class="hero-title">${t("tagline")}</h1>
-      <p class="hero-subtitle">${t("hero_desc")}</p>
-      <button class="hero-btn" onclick="switchView('plan')">
-        ${t("btn_plan_my_trip")} →
+    <!-- Full-Width Karnataka Hero Card -->
+    <div class="hero-karnataka">
+      <div class="hero-karnataka-badge">📍 Explore Karnataka</div>
+      <h1 class="hero-karnataka-title">Karnataka Weekend & Day Trips</h1>
+      <p class="hero-karnataka-desc">
+        Deterministic recommendations matched to your real budget, available time, and interests across 40 iconic destinations.
+      </p>
+      <button class="hero-karnataka-cta" onclick="switchView('plan')">
+        <span>✨ Start Planning</span> <span>➔</span>
       </button>
     </div>
 
-    <!-- Algorithm Feature Highlight -->
-    <div class="card" style="background: linear-gradient(135deg, #f0fdf4, #ffffff);">
-      <div class="section-title">🧠 Explainable 8-Factor Intelligence</div>
-      <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">
-        Unlike opaque generative models, TravelMate AI evaluates deterministic mathematical weights:
-        Budget (20%), Interests (20%), Time Feasibility (15%), Travel Mood (15%), Food Compatibility (10%), Distance (10%), Transport (5%), Season (5%).
-      </p>
-      <div class="chip-grid">
-        <span class="chip active">Scores Are Always Transparent</span>
-        <span class="chip active">Works Offline + AI-Enhanced Online</span>
+    <!-- Quick Action Navigation Tiles -->
+    <div class="quick-actions-grid">
+      <div class="quick-action-tile" onclick="switchView('plan')">
+        <div class="quick-action-icon">🧭</div>
+        <div class="quick-action-label">Plan Trip</div>
+      </div>
+      <div class="quick-action-tile" onclick="setExploreRadius(50); switchView('explore');">
+        <div class="quick-action-icon">📍</div>
+        <div class="quick-action-label">Near Me</div>
+      </div>
+      <div class="quick-action-tile" onclick="switchView('saved')">
+        <div class="quick-action-icon">💾</div>
+        <div class="quick-action-label">Saved</div>
+      </div>
+      <div class="quick-action-tile" onclick="switchView('feedback')">
+        <div class="quick-action-icon">⭐</div>
+        <div class="quick-action-label">Reviews</div>
       </div>
     </div>
 
-    <!-- Quick Destinations Showcase -->
-    <div class="section-title">🌟 Popular Karnataka Escapes</div>
-    <div class="chip-grid" style="margin-bottom: 16px;">
-      ${state.destinations.slice(0, 6).map(d => `
-        <div class="chip" onclick="showDestinationDetails(${d.id})">
-          📍 ${d.name} <span style="font-size: 10px; color: var(--text-muted);">(${d.distance_km} km)</span>
+    <!-- Compact "How it Works" Bottom Sheet Trigger Card -->
+    <div class="how-it-works-card" onclick="openIntelligenceModal()">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="font-size: 24px;">💡</span>
+        <div>
+          <div style="font-weight: 700; font-size: 13px; color: var(--text-main);">How TravelMate Works</div>
+          <div style="font-size: 11px; color: var(--text-muted);">8-Factor deterministic scoring model</div>
         </div>
-      `).join("")}
+      </div>
+      <span style="color: var(--primary); font-size: 12px; font-weight: 700;">Learn more →</span>
     </div>
 
-    <button class="btn-primary" onclick="switchView('plan')">
+    <!-- Trending This Season Section -->
+    ${trending.length > 0 ? `
+      <div class="trending-header-row">
+        <div class="section-title" style="margin-bottom: 0;">🔥 Trending in ${currMonthName}</div>
+        <span style="font-size: 11px; color: var(--primary); font-weight: 700;">Best Season</span>
+      </div>
+      <div class="trending-scroll-container">
+        ${trending.map(d => `
+          <div class="trending-card" onclick="showDestinationDetails('${d.id}')">
+            <div class="trending-img-wrap">
+              <img src="${d.image}" alt="${d.name}" class="trending-img" onerror="handleImageError(this, '${d.id}')">
+              <span class="trending-badge">${currMonthName}</span>
+            </div>
+            <div class="trending-body">
+              <div class="trending-name">${d.name}</div>
+              <div class="trending-district">📍 ${d.district}</div>
+              <div class="trending-cost">₹${d.costPerPersonINR}/person</div>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+      <div style="margin-bottom: 18px;"></div>
+    ` : ''}
+
+    <!-- Popular Karnataka Escapes Showcase -->
+    <div class="section-title">🌟 Popular Karnataka Escapes</div>
+    <div class="dest-cards-grid">
+      ${escapes.map(d => {
+    const dist = getDestinationDistance(d);
+    return `
+          <div class="dest-card" onclick="showDestinationDetails('${d.id}')">
+            <div class="dest-card-img-wrap">
+              <img src="${d.image}" alt="${d.name}" class="dest-card-img" onerror="handleImageError(this, '${d.id}')">
+              <div class="dest-card-dist-badge">📍 ${dist} km away</div>
+            </div>
+            <div class="dest-card-body">
+              <div class="dest-card-title">${d.name}</div>
+              <div class="dest-card-subtitle">${d.district} • ${d.recommendedTime}</div>
+              <div class="chip-grid" style="margin: 6px 0;">
+                ${(d.interests || []).slice(0, 3).map(i => `<span class="chip" style="font-size:10px; padding:2px 6px;">${i}</span>`).join("")}
+              </div>
+              <div class="dest-card-footer">
+                <span class="dest-card-cost">₹${d.costPerPersonINR} <span style="font-size: 10px; font-weight: normal; color: var(--text-muted);">/person</span></span>
+                <span class="chip active" style="font-size: 11px;">View Details →</span>
+              </div>
+            </div>
+          </div>
+        `;
+  }).join("")}
+    </div>
+
+    <button class="btn-primary" style="margin-top: 14px;" onclick="switchView('plan')">
       ${t("btn_plan_my_trip")}
     </button>
   `;
 }
 
-// 2. Plan Your Trip Form View
+// 2. Plan Your Trip 4-Step Wizard View
+function setWizardStep(step) {
+  if (step >= 1 && step <= 4) {
+    state.wizardStep = step;
+    renderApp();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+}
+
+function setTransportChoice(mode) {
+  state.preferences.transportation = mode;
+  renderApp();
+}
+
+function setFoodChoice(food) {
+  state.preferences.food_preference = food;
+  renderApp();
+}
+
+function setPeriodChoice(period) {
+  state.preferences.travel_period = period;
+  renderApp();
+}
+
 function renderPlanView() {
   const p = state.preferences;
+  const step = state.wizardStep || 1;
+
+  const stepTitles = {
+    1: "Step 1 of 4 • Where & Max Distance",
+    2: "Step 2 of 4 • Budget & Available Time",
+    3: "Step 3 of 4 • Travel Mood & Interests",
+    4: "Step 4 of 4 • Transport & Food Choices"
+  };
+
   return `
-    <div class="card">
-      <div class="section-title">🗺️ ${t("nav_plan")}</div>
-
-      <!-- Starting Location -->
-      <div class="form-group">
-        <label class="form-label">${t("lbl_starting_location")}</label>
-        <input type="text" id="input-origin" class="form-input" value="${p.starting_location}">
-        <button id="btn-location-detect" class="loc-btn" onclick="useCurrentLocation()">
-          ${p.has_custom_loc ? t("btn_location_active") : t("btn_use_location")}
-        </button>
+    <!-- 4-Step Wizard Progress Card -->
+    <div class="wizard-progress-card">
+      <div class="wizard-step-header">
+        <span class="wizard-step-title">🧭 ${stepTitles[step]}</span>
+        <span class="wizard-step-count">${step}/4</span>
       </div>
-
-      <!-- Budget Range -->
-      <div class="form-group">
-        <label class="form-label">${t("lbl_budget")}</label>
-        <div class="range-container">
-          <input type="range" id="input-budget" class="range-slider" min="500" max="10000" step="250" value="${p.budget}">
-          <span class="range-val" id="val-budget">₹${p.budget}</span>
-        </div>
-        <small style="color: var(--text-muted); font-size: 11px;">Total estimated budget for entire group</small>
+      <div class="wizard-bar-track">
+        <div class="wizard-bar-fill" style="width: ${(step / 4) * 100}%;"></div>
       </div>
-
-      <!-- Available Time -->
-      <div class="form-group">
-        <label class="form-label">${t("lbl_time_avail")}</label>
-        <div class="chip-grid">
-          ${["2-3 hours", "Half day", "One day", "Weekend"].map(opt => `
-            <span class="chip ${p.available_time === opt ? 'active' : ''}" onclick="selectTime('${opt}')">${opt}</span>
-          `).join("")}
-        </div>
-      </div>
-
-      <!-- Number of Travelers -->
-      <div class="form-group">
-        <label class="form-label">${t("lbl_travelers")}</label>
-        <div style="display: flex; align-items: center; gap: 12px;">
-          <button class="chip" onclick="adjustTravelers(-1)" style="font-size: 16px; padding: 4px 14px;">-</button>
-          <span style="font-weight: 700; font-size: 16px;" id="val-travelers">${p.travelers}</span>
-          <button class="chip" onclick="adjustTravelers(1)" style="font-size: 16px; padding: 4px 14px;">+</button>
-          <span style="color: var(--text-muted); font-size: 12px;">traveler(s)</span>
-        </div>
-      </div>
-
-      <!-- Transportation Mode -->
-      <div class="form-group">
-        <label class="form-label">${t("lbl_transport")}</label>
-        <select id="select-transport" class="form-select">
-          ${["Car", "Bike", "Bus", "Train", "Cab", "Public transport"].map(m => `
-            <option value="${m}" ${p.transportation === m ? 'selected' : ''}>${m}</option>
-          `).join("")}
-        </select>
-      </div>
-
-      <!-- Travel Mood -->
-      <div class="form-group">
-        <label class="form-label">${t("lbl_travel_mood")}</label>
-        <div class="chip-grid">
-          ${ALL_MOODS.map(m => `
-            <span class="chip ${p.travel_mood === m ? 'active' : ''}" onclick="selectMood('${m}')">${m}</span>
-          `).join("")}
-        </div>
-      </div>
-
-      <!-- Interests -->
-      <div class="form-group">
-        <label class="form-label">${t("lbl_interests")}</label>
-        <div>
-          ${ALL_INTERESTS.map(item => `
-            <span class="interest-tag ${p.interests.includes(item) ? 'selected' : ''}" onclick="toggleInterest('${item}')">
-              ${p.interests.includes(item) ? '✓ ' : '+ '}${item}
-            </span>
-          `).join("")}
-        </div>
-      </div>
-
-      <!-- Max Distance -->
-      <div class="form-group">
-        <label class="form-label">${t("lbl_max_distance")}</label>
-        <div class="range-container">
-          <input type="range" id="input-distance" class="range-slider" min="10" max="300" step="10" value="${p.max_distance}">
-          <span class="range-val" id="val-distance">${p.max_distance} km</span>
-        </div>
-      </div>
-
-      <!-- Food Preference -->
-      <div class="form-group">
-        <label class="form-label">${t("lbl_food_pref")}</label>
-        <select id="select-food" class="form-select">
-          ${["Vegetarian", "Non-vegetarian", "Vegan", "Jain", "No preference"].map(f => `
-            <option value="${f}" ${p.food_preference === f ? 'selected' : ''}>${f}</option>
-          `).join("")}
-        </select>
-      </div>
-
-      <!-- Travel Period -->
-      <div class="form-group">
-        <label class="form-label">${t("lbl_travel_period")}</label>
-        <select id="select-period" class="form-select">
-          ${["January-March", "April-June", "July-September", "October-December", "Flexible dates"].map(s => `
-            <option value="${s}" ${p.travel_period === s ? 'selected' : ''}>${s}</option>
-          `).join("")}
-        </select>
-      </div>
-
-      <button class="btn-primary" onclick="submitTripForm()">
-        ${t("btn_find_trip")}
-      </button>
     </div>
+
+    <!-- Step 1: Starting Location & Distance -->
+    ${step === 1 ? `
+      <div class="card">
+        <div class="section-title">📍 Where Are You Starting From?</div>
+        
+        <div class="form-group">
+          <label class="form-label">${t("lbl_starting_location")}</label>
+          <input type="text" id="input-origin" class="form-input" value="${p.starting_location}" placeholder="e.g. Bengaluru, Mysuru, Hubballi...">
+          <button id="btn-location-detect" class="loc-btn" onclick="useCurrentLocation()">
+            ${p.has_custom_loc ? t("btn_location_active") : t("btn_use_location")}
+          </button>
+        </div>
+
+        <div class="form-group" style="margin-top: 18px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <label class="form-label" style="margin-bottom: 0;">${t("lbl_max_distance")}</label>
+            <span style="font-weight: 800; color: var(--primary-dark); font-size: 14px;" id="val-distance">${p.max_distance} km</span>
+          </div>
+          <div class="range-container">
+            <input type="range" id="input-distance" class="range-slider" min="15" max="450" step="10" value="${p.max_distance}">
+          </div>
+          <small style="color: var(--text-muted); font-size: 11px;">Calculated using great-circle Haversine formula from origin</small>
+        </div>
+
+        <div class="wizard-nav-btns">
+          <button class="btn-primary" style="width: 100%;" onclick="setWizardStep(2)">
+            Next: Budget & Time ➔
+          </button>
+        </div>
+      </div>
+    ` : ''}
+
+    <!-- Step 2: Budget & Available Time -->
+    ${step === 2 ? `
+      <div class="card">
+        <div class="section-title">💰 Group Budget & Duration</div>
+
+        <!-- Number of Travelers -->
+        <div class="form-group">
+          <label class="form-label">${t("lbl_travelers")}</label>
+          <div style="display: flex; align-items: center; gap: 14px; background: var(--surface-subtle); padding: 8px 14px; border-radius: var(--radius-md); border: 1px solid var(--border);">
+            <button class="chip" onclick="adjustTravelers(-1)" style="font-size: 16px; padding: 4px 14px; font-weight: 800;">-</button>
+            <span style="font-weight: 800; font-size: 18px; color: var(--text-main);" id="val-travelers">${p.travelers}</span>
+            <button class="chip" onclick="adjustTravelers(1)" style="font-size: 16px; padding: 4px 14px; font-weight: 800;">+</button>
+            <span style="color: var(--text-muted); font-size: 12px; margin-left: auto;">traveler(s) in group</span>
+          </div>
+        </div>
+
+        <!-- Budget Slider with Large Display -->
+        <div class="form-group" style="text-align: center; margin-top: 14px;">
+          <label class="form-label" style="text-align: center;">Total Group Budget</label>
+          <div class="budget-huge-display" id="val-budget">₹${p.budget.toLocaleString()}</div>
+          <div class="range-container">
+            <input type="range" id="input-budget" class="range-slider" min="500" max="25000" step="250" value="${p.budget}">
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+            <span>₹500 (Budget)</span>
+            <span>₹25,000 (Luxury)</span>
+          </div>
+        </div>
+
+        <!-- Available Time Chips -->
+        <div class="form-group" style="margin-top: 16px;">
+          <label class="form-label">${t("lbl_time_avail")}</label>
+          <div class="chip-grid">
+            ${["2-3 hours", "Half day", "One day", "Weekend"].map(opt => `
+              <span class="chip ${p.available_time === opt ? 'active' : ''}" onclick="selectTime('${opt}')">${opt}</span>
+            `).join("")}
+          </div>
+        </div>
+
+        <div class="wizard-nav-btns">
+          <button class="btn-secondary" style="flex: 1;" onclick="setWizardStep(1)">← Back</button>
+          <button class="btn-primary" style="flex: 2;" onclick="setWizardStep(3)">Next: Interests ➔</button>
+        </div>
+      </div>
+    ` : ''}
+
+    <!-- Step 3: Interests & Travel Mood -->
+    ${step === 3 ? `
+      <div class="card">
+        <div class="section-title">✨ Mood & Activities</div>
+
+        <!-- Travel Mood Chips -->
+        <div class="form-group">
+          <label class="form-label">${t("lbl_travel_mood")}</label>
+          <div class="chip-grid">
+            ${ALL_MOODS.map(m => `
+              <span class="chip ${p.travel_mood === m ? 'active' : ''}" onclick="selectMood('${m}')">${m}</span>
+            `).join("")}
+          </div>
+        </div>
+
+        <!-- Interests Multi-select -->
+        <div class="form-group" style="margin-top: 16px;">
+          <label class="form-label">${t("lbl_interests")} (Tap to select multiple)</label>
+          <div>
+            ${ALL_INTERESTS.map(item => `
+              <span class="interest-tag ${p.interests.includes(item) ? 'selected' : ''}" onclick="toggleInterest('${item}')">
+                ${p.interests.includes(item) ? '✓ ' : '+ '}${item}
+              </span>
+            `).join("")}
+          </div>
+        </div>
+
+        <div class="wizard-nav-btns">
+          <button class="btn-secondary" style="flex: 1;" onclick="setWizardStep(2)">← Back</button>
+          <button class="btn-primary" style="flex: 2;" onclick="setWizardStep(4)">Next: Preferences ➔</button>
+        </div>
+      </div>
+    ` : ''}
+
+    <!-- Step 4: Transport & Food Preferences -->
+    ${step === 4 ? `
+      <div class="card">
+        <div class="section-title">🚗 Transport & Dining Preferences</div>
+
+        <!-- Transportation Icon Chips -->
+        <div class="form-group">
+          <label class="form-label">${t("lbl_transport")} Mode</label>
+          <div class="icon-choice-grid">
+            ${[
+        { id: "Car", icon: "🚗", label: "Car" },
+        { id: "Bike", icon: "🏍️", label: "Bike" },
+        { id: "Bus", icon: "🚌", label: "Bus" },
+        { id: "Train", icon: "🚂", label: "Train" },
+        { id: "Cab", icon: "🚕", label: "Cab" },
+        { id: "Public transport", icon: "🚊", label: "Public" }
+      ].map(m => `
+              <button type="button" class="icon-choice-btn ${p.transportation === m.id ? 'active' : ''}" onclick="setTransportChoice('${m.id}')">
+                <span style="font-size: 20px;">${m.icon}</span>
+                <span>${m.label}</span>
+              </button>
+            `).join("")}
+          </div>
+        </div>
+
+        <!-- Food Preference Icon Chips -->
+        <div class="form-group" style="margin-top: 16px;">
+          <label class="form-label">${t("lbl_food_pref")}</label>
+          <div class="icon-choice-grid">
+            ${[
+        { id: "Vegetarian", icon: "🥗", label: "Pure Veg" },
+        { id: "Non-vegetarian", icon: "🍗", label: "Non-Veg" },
+        { id: "Vegan", icon: "🌱", label: "Vegan" },
+        { id: "Jain", icon: "🍲", label: "Jain Food" },
+        { id: "No preference", icon: "🍽️", label: "Any Food" }
+      ].map(f => `
+              <button type="button" class="icon-choice-btn ${p.food_preference === f.id ? 'active' : ''}" onclick="setFoodChoice('${f.id}')">
+                <span style="font-size: 20px;">${f.icon}</span>
+                <span>${f.label}</span>
+              </button>
+            `).join("")}
+          </div>
+        </div>
+
+        <!-- Travel Period -->
+        <div class="form-group" style="margin-top: 16px;">
+          <label class="form-label">${t("lbl_travel_period")}</label>
+          <div class="chip-grid">
+            ${["January-March", "April-June", "July-September", "October-December", "Flexible dates"].map(s => `
+              <span class="chip ${p.travel_period === s ? 'active' : ''}" onclick="setPeriodChoice('${s}')">${s}</span>
+            `).join("")}
+          </div>
+        </div>
+
+        <div class="wizard-nav-btns" style="margin-top: 20px;">
+          <button class="btn-secondary" style="flex: 1;" onclick="setWizardStep(3)">← Back</button>
+          <button class="btn-primary" style="flex: 2; background: linear-gradient(135deg, #059669, #047857);" onclick="submitTripForm()">
+            ✨ Find My Trip ➔
+          </button>
+        </div>
+      </div>
+    ` : ''}
   `;
 }
 
@@ -607,7 +1089,8 @@ function bindPlanFormEvents() {
   if (bSlider) {
     bSlider.addEventListener("input", (e) => {
       state.preferences.budget = parseInt(e.target.value);
-      document.getElementById("val-budget").textContent = `₹${e.target.value}`;
+      const valEl = document.getElementById("val-budget");
+      if (valEl) valEl.textContent = `₹${parseInt(e.target.value).toLocaleString()}`;
     });
   }
 
@@ -615,7 +1098,8 @@ function bindPlanFormEvents() {
   if (dSlider) {
     dSlider.addEventListener("input", (e) => {
       state.preferences.max_distance = parseInt(e.target.value);
-      document.getElementById("val-distance").textContent = `${e.target.value} km`;
+      const valEl = document.getElementById("val-distance");
+      if (valEl) valEl.textContent = `${e.target.value} km`;
     });
   }
 
@@ -623,27 +1107,6 @@ function bindPlanFormEvents() {
   if (originInput) {
     originInput.addEventListener("change", (e) => {
       state.preferences.starting_location = e.target.value;
-    });
-  }
-
-  const transSelect = document.getElementById("select-transport");
-  if (transSelect) {
-    transSelect.addEventListener("change", (e) => {
-      state.preferences.transportation = e.target.value;
-    });
-  }
-
-  const foodSelect = document.getElementById("select-food");
-  if (foodSelect) {
-    foodSelect.addEventListener("change", (e) => {
-      state.preferences.food_preference = e.target.value;
-    });
-  }
-
-  const periodSelect = document.getElementById("select-period");
-  if (periodSelect) {
-    periodSelect.addEventListener("change", (e) => {
-      state.preferences.travel_period = e.target.value;
     });
   }
 }
@@ -683,15 +1146,39 @@ function submitTripForm() {
 
 // 3. AI Recommendations Results View
 function renderResultsView() {
+  const n = (state.destinations && Array.isArray(state.destinations)) ? state.destinations.length : 0;
+  if (n === 0) {
+    return `
+      <div class="card" style="text-align: center; padding: 32px 16px;">
+        <div style="background: #ef4444; color: #ffffff; padding: 16px; border-radius: 12px; font-weight: 800; font-size: 15px; margin-bottom: 12px; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);">
+          Unable to load destinations
+        </div>
+        <p style="color: var(--text-muted); font-size: 13px; margin: 8px 0 16px;">
+          Please check your connection and reload the app.
+        </p>
+        <button class="btn-primary" onclick="switchView('home')">Return Home</button>
+      </div>
+    `;
+  }
+
   if (!state.recommendations || state.recommendations.length === 0) {
+    const origin = getOriginCoords();
+    const sortedByDist = [...state.destinations].map(d => ({ ...d, dist: getDestinationDistance(d) })).sort((a,b) => a.dist - b.dist);
+    const closest = sortedByDist[0];
     return `
       <div class="card" style="text-align: center; padding: 32px 16px;">
         <div style="font-size: 40px; margin-bottom: 8px;">🔍</div>
-        <h3>No Exact Destinations Found</h3>
-        <p style="color: var(--text-muted); font-size: 13px; margin: 8px 0 16px;">
-          No destinations matched your max distance (${state.preferences.max_distance} km). Try expanding your radius.
+        <h3>No Exact Destinations Found Within ${state.preferences.max_distance} km</h3>
+        <p style="color: var(--text-muted); font-size: 13px; margin: 8px 0 16px; line-height: 1.5;">
+          All <strong>${n}</strong> destinations are loaded, but none are within your chosen limit (${state.preferences.max_distance} km) from origin (<strong>${origin.lat.toFixed(2)}, ${origin.lng.toFixed(2)}</strong>).<br>
+          The closest destination is <strong>${closest.name}</strong> (${closest.dist} km away).
         </p>
-        <button class="btn-primary" onclick="switchView('plan')">Adjust Preferences</button>
+        <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+          <button class="btn-accent" style="width: auto; padding: 12px 20px;" onclick="state.preferences.max_distance = ${Math.max(closest.dist + 20, 300)}; submitTripForm();">
+            Expand Radius to ${Math.max(closest.dist + 20, 300)} km
+          </button>
+          <button class="btn-primary" style="width: auto; padding: 12px 20px;" onclick="switchView('plan')">Adjust Preferences</button>
+        </div>
       </div>
     `;
   }
@@ -708,7 +1195,7 @@ function renderResultsView() {
     return `
         <div class="rec-card">
           <div class="rec-img-container">
-            <img src="${d.image_url}" alt="${d.name}" class="rec-img" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800';">
+            <img src="${d.image}" alt="${d.name}" class="rec-img" onerror="handleImageError(this, '${d.id}')">
             <div class="rec-badge-score">
               Match <span>${item.overall_score}%</span>
             </div>
@@ -716,18 +1203,18 @@ function renderResultsView() {
           <div class="rec-content">
             <div class="rec-header">
               <span class="rec-name">${idx + 1}. ${d.name}</span>
-              <span class="rec-region">${d.city}, ${d.region}</span>
+              <span class="rec-region">${d.district}</span>
             </div>
 
             <!-- Meta statistics -->
             <div class="rec-meta-grid">
               <div class="rec-meta-item">
                 <span class="rec-meta-label">Distance</span>
-                <span class="rec-meta-val">${d.distance_km} km</span>
+                <span class="rec-meta-val">${item.distance_km} km</span>
               </div>
               <div class="rec-meta-item">
                 <span class="rec-meta-label">Est. Travel</span>
-                <span class="rec-meta-val">~${d.travel_time_hours} hrs</span>
+                <span class="rec-meta-val">~${item.estimated_travel_time_hours} hrs</span>
               </div>
               <div class="rec-meta-item">
                 <span class="rec-meta-label">Group Cost</span>
@@ -735,7 +1222,7 @@ function renderResultsView() {
               </div>
             </div>
 
-            <!-- Explainable Factor Breakdown -->
+            <!-- Explainable 8-Factor Breakdown -->
             <div class="factor-bar-group">
               <div class="factor-row">
                 <span class="factor-name">Budget (20%)</span>
@@ -757,6 +1244,26 @@ function renderResultsView() {
                 <div class="factor-track"><div class="factor-fill" style="width: ${scores.mood}%;"></div></div>
                 <span class="factor-num">${scores.mood}%</span>
               </div>
+              <div class="factor-row">
+                <span class="factor-name">Food (10%)</span>
+                <div class="factor-track"><div class="factor-fill" style="width: ${scores.food}%;"></div></div>
+                <span class="factor-num">${scores.food}%</span>
+              </div>
+              <div class="factor-row">
+                <span class="factor-name">Distance (10%)</span>
+                <div class="factor-track"><div class="factor-fill" style="width: ${scores.distance}%;"></div></div>
+                <span class="factor-num">${scores.distance}%</span>
+              </div>
+              <div class="factor-row">
+                <span class="factor-name">Transport (5%)</span>
+                <div class="factor-track"><div class="factor-fill" style="width: ${scores.transportation}%;"></div></div>
+                <span class="factor-num">${scores.transportation}%</span>
+              </div>
+              <div class="factor-row">
+                <span class="factor-name">Season (5%)</span>
+                <div class="factor-track"><div class="factor-fill" style="width: ${scores.season}%;"></div></div>
+                <span class="factor-num">${scores.season}%</span>
+              </div>
             </div>
 
             <!-- Personalized Reasons -->
@@ -768,12 +1275,41 @@ function renderResultsView() {
               `).join("")}
             </div>
 
-            <div class="rec-actions">
-              <button class="btn-accent" onclick="showDestinationDetails(${d.id})">
-                ${t("btn_view_trip")}
+            <!-- Day-Wise Suggested Itinerary Timeline -->
+            ${(() => {
+        const itin = generateItineraryForDestination(d);
+        return `
+                <div style="margin: 12px 0; background: var(--surface-subtle); padding: 12px; border-radius: var(--radius-md); border: 1px solid var(--border);">
+                  <div style="font-weight: 800; font-size: 12px; color: var(--primary-dark); margin-bottom: 8px;">
+                    🗓️ Day-Wise Suggested Schedule (${d.recommendedTime})
+                  </div>
+                  <div class="itinerary-timeline-v2" style="display: flex; flex-direction: column; gap: 8px;">
+                    ${(itin.timeline || []).slice(0, 4).map(step => `
+                      <div style="display: flex; gap: 8px; font-size: 11px; align-items: flex-start;">
+                        <span style="font-weight: 700; color: var(--text-muted); min-width: 62px;">${step.time}</span>
+                        <div><strong>${step.title}</strong> — <span style="color: var(--text-muted);">${step.desc}</span></div>
+                      </div>
+                    `).join("")}
+                  </div>
+                </div>
+              `;
+      })()}
+
+            <!-- Actions: Save, WhatsApp, Google Maps, Details -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px;">
+              <button class="btn-primary" style="padding: 9px;" onclick="saveTripToProfile('${d.id}')">
+                💾 Save Trip
               </button>
-              <button class="btn-secondary" onclick="saveTripToProfile(${d.id})">
-                ${t("btn_save_trip")}
+              <button class="btn-whatsapp" style="padding: 9px;" onclick="shareTripOnWhatsApp('${d.id}')">
+                💬 WhatsApp
+              </button>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px;">
+              <button class="btn-maps" style="padding: 9px;" onclick="openGoogleMapsDirections('${d.id}')">
+                🗺️ Google Maps
+              </button>
+              <button class="btn-secondary" style="padding: 9px;" onclick="showDestinationDetails('${d.id}')">
+                📖 Full Details
               </button>
             </div>
           </div>
@@ -785,6 +1321,34 @@ function renderResultsView() {
       ← Modify Trip Preferences
     </button>
   `;
+}
+
+// WhatsApp Share and Google Maps Navigation Handlers
+function shareTripOnWhatsApp(destId) {
+  const d = state.destinations.find(x => String(x.id) === String(destId));
+  if (!d) return;
+  const p = state.preferences;
+  const dist = getDestinationDistance(d);
+  const text = encodeURIComponent(
+    `🧭 *TravelMate AI Karnataka Trip Plan*\n\n` +
+    `📍 *${d.name}* (${d.district})\n` +
+    `🚗 Distance: ~${dist} km from ${p.starting_location}\n` +
+    `⏱️ Recommended Duration: ${d.recommendedTime}\n` +
+    `💰 Est. Cost: ₹${d.costPerPersonINR}/person (Group: ₹${d.costPerPersonINR * p.travelers})\n` +
+    `☀️ Best Season: ${formatBestMonths(d.bestMonths)}\n\n` +
+    `🗺️ Directions: https://www.google.com/maps/dir/?api=1&origin=${p.starting_location}&destination=${d.lat},${d.lng}\n\n` +
+    `Planned with TravelMate AI — Karnataka Smart Travel Companion!`
+  );
+  window.open(`https://api.whatsapp.com/send?text=${text}`, "_blank");
+}
+
+function openGoogleMapsDirections(destId) {
+  let d = typeof destId === "object" ? destId : state.destinations.find(x => String(x.id) === String(destId));
+  if (!d) d = state.selectedDestination;
+  if (!d) return;
+  const origin = getOriginCoords();
+  const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin.lat},${origin.lng}&destination=${d.lat},${d.lng}`;
+  window.open(mapsUrl, "_blank");
 }
 
 // 4. Comparison View
@@ -825,26 +1389,26 @@ function renderComparisonView() {
           <tr>
             <td style="padding: 10px; font-weight: 600;">Distance</td>
             ${state.recommendations.map(r => `
-              <td style="padding: 10px; text-align: center;">${r.destination.distance_km} km</td>
+              <td style="padding: 10px; text-align: center;">${r.distance_km} km</td>
             `).join("")}
           </tr>
           <tr style="background: #f8fafc;">
             <td style="padding: 10px; font-weight: 600;">Travel Time</td>
             ${state.recommendations.map(r => `
-              <td style="padding: 10px; text-align: center;">~${r.destination.travel_time_hours} hrs</td>
+              <td style="padding: 10px; text-align: center;">~${r.estimated_travel_time_hours} hrs</td>
             `).join("")}
           </tr>
           <tr>
             <td style="padding: 10px; font-weight: 600;">Best Season</td>
             ${state.recommendations.map(r => `
-              <td style="padding: 10px; text-align: center; font-size: 11px;">${r.destination.best_season}</td>
+              <td style="padding: 10px; text-align: center; font-size: 11px;">${formatBestMonths(r.destination.bestMonths)}</td>
             `).join("")}
           </tr>
           <tr style="background: #f8fafc;">
             <td style="padding: 10px; font-weight: 600;">Action</td>
             ${state.recommendations.map(r => `
               <td style="padding: 10px; text-align: center;">
-                <button class="chip active" onclick="showDestinationDetails(${r.destination.id})">Select</button>
+                <button class="chip active" onclick="showDestinationDetails('${r.destination.id}')">Select</button>
               </td>
             `).join("")}
           </tr>
@@ -856,7 +1420,7 @@ function renderComparisonView() {
 
 // 5. Destination Details & Itinerary View
 function showDestinationDetails(destId) {
-  const d = state.destinations.find(x => x.id === destId);
+  const d = state.destinations.find(x => String(x.id) === String(destId));
   if (!d) return;
   state.selectedDestination = d;
   switchView("details");
@@ -866,6 +1430,7 @@ function renderDetailsView() {
   const d = state.selectedDestination;
   if (!d) return `<div class="card">No destination selected.</div>`;
 
+  const dist = getDestinationDistance(d);
   const itin = generateItineraryForDestination(d);
   const budget = calculateDetailedBudget(d);
 
@@ -877,33 +1442,40 @@ function renderDetailsView() {
     <!-- Header Card -->
     <div class="card" style="padding: 0; overflow: hidden;">
       <div style="height: 180px; width: 100%; position: relative;">
-        <img src="${d.image_url}" alt="${d.name}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800';">
-        <div style="position: absolute; bottom: 12px; left: 16px; color: white; text-shadow: 0 2px 4px rgba(0,0,0,0.8);">
-          <h1 style="font-size: 22px; font-weight: 800;">${d.name}</h1>
-          <p style="font-size: 12px; opacity: 0.9;">${d.city}, ${d.region} • ${d.destination_type}</p>
+        <img src="${d.image}" alt="${d.name}" style="width: 100%; height: 100%; object-fit: cover;" onerror="handleImageError(this, '${d.id}')">
+        <div style="position: absolute; bottom: 12px; left: 16px; right: 16px; color: white; text-shadow: 0 2px 4px rgba(0,0,0,0.85);">
+          <h1 style="font-size: 22px; font-weight: 800; line-height: 1.2;">${d.name}</h1>
+          <p style="font-size: 12px; opacity: 0.95;">${d.district}, Karnataka • ${d.recommendedTime}</p>
         </div>
       </div>
       <div style="padding: 16px;">
+        <p style="font-size: 13px; color: var(--text-main); margin-bottom: 12px; line-height: 1.5;">${d.description}</p>
         <div class="chip-grid" style="margin-bottom: 12px;">
-          <span class="chip">🚗 ${d.distance_km} km away</span>
-          <span class="chip">⏱️ ~${d.travel_time_hours} hrs drive</span>
-          <span class="chip">💰 ₹${d.average_cost_per_person}/person</span>
-          <span class="chip">🎟️ Entry: ₹${d.entry_fee_estimate}</span>
+          <span class="chip">🚗 ${dist} km away</span>
+          <span class="chip">⏱️ ${d.recommendedTime}</span>
+          <span class="chip">💰 ₹${d.costPerPersonINR}/person</span>
+          <span class="chip">${d.vegFriendly ? '🥗 Pure Veg Options' : '🍗 Mixed Dining'}</span>
+          <span class="chip">🍽️ ${d.foodOptions === 'easy' ? 'Easy Dining' : 'Limited Food'}</span>
         </div>
 
-        <button class="btn-primary" onclick="openGoogleMapsDirections(state.selectedDestination)">
-          ${t("btn_open_maps")} ↗
-        </button>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn-primary" style="flex: 2;" onclick="openGoogleMapsDirections(state.selectedDestination)">
+            ${t("btn_open_maps")} ↗
+          </button>
+          <button class="btn-secondary" style="flex: 1;" onclick="saveTripToProfile('${d.id}')">
+            💾 Save
+          </button>
+        </div>
       </div>
     </div>
 
-    <!-- Smart Route Map Section (Section 27) -->
+    <!-- Smart Route Section -->
     <div class="card">
-      <div class="section-title">🗺️ ${t("sec_smart_map")}</div>
+      <div class="section-title">🗺️ Route & Navigation</div>
       <div class="route-box">
         <div class="route-header">
           <span style="font-weight: 700;">From: ${state.preferences.starting_location}</span>
-          <span style="color: var(--primary); font-weight: 700;">To: ${d.name}</span>
+          <span style="color: var(--primary); font-weight: 700;">To: ${d.name} (${d.district})</span>
         </div>
         <div style="display: flex; gap: 8px; margin: 10px 0;">
           <button class="chip ${state.preferences.transportation === 'Car' ? 'active' : ''}" onclick="setTravelMode('Car')">🚗 Driving</button>
@@ -911,12 +1483,12 @@ function renderDetailsView() {
           <button class="chip ${state.preferences.transportation === 'Bus' ? 'active' : ''}" onclick="setTravelMode('Bus')">🚌 Transit</button>
         </div>
         <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px;">
-          • Highway Distance: ~${d.distance_km} km<br>
-          • Estimated Driving Duration: ~${d.travel_time_hours} hrs<br>
-          • Route Status: High-speed corridor verified
+          • Haversine Distance: ~${dist} km<br>
+          • Recommended Modes: ${(d.transport || []).join(", ") || "Car, Bus"}<br>
+          • Mood Vibe: ${(d.moods || []).join(", ") || "Scenic"}
         </div>
         <button class="btn-secondary" style="width: 100%;" onclick="openGoogleMapsDirections(state.selectedDestination)">
-          ${t("btn_open_maps")}
+          Open GPS Navigation
         </button>
       </div>
     </div>
@@ -942,7 +1514,7 @@ function renderDetailsView() {
       </div>
     </div>
 
-    <!-- Budget Breakdown & Optimizer Section -->
+    <!-- Budget Breakdown Section -->
     <div class="card" id="budget-card">
       <div class="section-title">💰 ${t("sec_budget_breakdown")}</div>
       <table class="budget-table">
@@ -955,20 +1527,20 @@ function renderDetailsView() {
           <td style="text-align: right;">₹${budget.foodCost}</td>
         </tr>
         <tr>
-          <td>Entry & Activity Fees</td>
-          <td style="text-align: right;">₹${budget.entryCost + budget.activityCost}</td>
+          <td>Sightseeing & Entry Fees</td>
+          <td style="text-align: right;">₹${budget.entryCost}</td>
         </tr>
         <tr>
           <td>Parking & Miscellaneous</td>
           <td style="text-align: right;">₹${budget.miscCost}</td>
         </tr>
-        <tr>
+        <tr style="font-weight: 700; border-top: 2px solid var(--border);">
           <td>Total Estimated Group Cost</td>
-          <td style="text-align: right;">₹${budget.totalGroupCost}</td>
+          <td style="text-align: right; color: var(--primary-dark);">₹${budget.totalGroupCost}</td>
         </tr>
       </table>
 
-      <div style="font-size: 12px; margin-bottom: 12px; display: flex; justify-content: space-between;">
+      <div style="font-size: 12px; margin: 12px 0; display: flex; justify-content: space-between;">
         <span>Cost per traveler: <strong>₹${budget.costPerPerson}</strong></span>
         <span>Target Budget: <strong>₹${state.preferences.budget}</strong></span>
       </div>
@@ -982,13 +1554,13 @@ function renderDetailsView() {
     <div class="card">
       <div class="section-title">🌤️ Seasonal Guidance & Local Tips</div>
       <p style="font-size: 12px; margin-bottom: 8px;">
-        <strong>Best Time to Visit:</strong> ${d.best_season} (${d.best_months})<br>
-        <strong>Seasonal Note:</strong> ${d.seasonal_tips}
+        <strong>Best Months to Visit:</strong> ${formatBestMonths(d.bestMonths)}<br>
+        <strong>Interests & Activities:</strong> ${(d.interests || []).join(", ")}
       </p>
       <div style="font-size: 12px; margin-bottom: 6px;"><strong>Recommended Packing:</strong></div>
       <div class="chip-grid">
         <span class="chip">👟 Grip walking shoes</span>
-        <span class="chip">💧 2L Reusable water bottle</span>
+        <span class="chip">💧 Reusable water bottle</span>
         <span class="chip">🧢 Sun hat / Cap</span>
         <span class="chip">💵 Small cash notes</span>
       </div>
@@ -1025,44 +1597,246 @@ function optimizeCurrentTripBudget() {
   }
 }
 
-// 6. Explore Nearby View (Section 27)
+// 6. Explore Nearby View with List/Map Toggle, Search & Category Filters
+let exploreMapInstance = null;
+
+function setExploreViewMode(mode) {
+  state.exploreViewMode = mode;
+  renderApp();
+}
+
+function setExploreCategory(cat) {
+  state.exploreCategory = cat;
+  renderApp();
+}
+
+function handleExploreSearch(query) {
+  state.exploreSearchQuery = query;
+  renderApp();
+}
+
+function initExploreMap() {
+  const mapEl = document.getElementById("explore-map");
+  if (!mapEl) return;
+
+  if (typeof L === "undefined") {
+    mapEl.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--text-muted);">Leaflet library loading...</div>`;
+    return;
+  }
+
+  // Teardown previous instance if exists
+  if (exploreMapInstance) {
+    try {
+      exploreMapInstance.remove();
+    } catch (e) { }
+    exploreMapInstance = null;
+  }
+
+  const origin = getOriginCoords();
+  exploreMapInstance = L.map("explore-map", {
+    zoomControl: true,
+    scrollWheelZoom: false
+  }).setView([origin.lat, origin.lng], 8);
+
+  const tileLayer = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 18,
+    attribution: "© OpenStreetMap contributors"
+  });
+
+  tileLayer.on("tileerror", () => {
+    const banner = document.getElementById("map-offline-banner");
+    if (banner) banner.style.display = "flex";
+  });
+
+  tileLayer.addTo(exploreMapInstance);
+
+  // User location marker
+  const userIcon = L.divIcon({
+    className: "user-loc-icon",
+    html: `<div style="background:#059669; color:#fff; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; border:2px solid #fff; box-shadow:0 2px 6px rgba(0,0,0,0.3); font-size:14px;">📍</div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14]
+  });
+  L.marker([origin.lat, origin.lng], { icon: userIcon })
+    .addTo(exploreMapInstance)
+    .bindPopup(`<strong>Your Origin:</strong><br>${state.preferences.starting_location}`);
+
+  // Get current filtered places
+  const currentFiltered = getFilteredExploreDestinations();
+
+  // Destination markers
+  currentFiltered.forEach(d => {
+    if (typeof d.lat !== "number" || typeof d.lng !== "number") return;
+    const marker = L.marker([d.lat, d.lng]).addTo(exploreMapInstance);
+    const popupContent = `
+      <div style="font-family: inherit; min-width: 150px;">
+        <div style="font-weight: 800; font-size: 13px; color: #065f46;">${d.name}</div>
+        <div style="font-size: 11px; color: #64748b;">📍 ${d.district} • ${d.distance} km</div>
+        <div style="font-size: 11px; font-weight: 700; margin: 4px 0;">₹${d.costPerPersonINR}/person</div>
+        <button style="background:#059669; color:#fff; border:none; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:700; cursor:pointer;" onclick="showDestinationDetails('${d.id}')">View Details ➔</button>
+      </div>
+    `;
+    marker.bindPopup(popupContent);
+  });
+}
+
+function getFilteredExploreDestinations() {
+  const radius = state.exploreRadius || "all";
+  const cat = state.exploreCategory || "all";
+  const search = (state.exploreSearchQuery || "").trim().toLowerCase();
+
+  return state.destinations
+    .map(d => ({
+      ...d,
+      distance: getDestinationDistance(d)
+    }))
+    .filter(d => {
+      // Radius filter
+      if (radius !== "all" && d.distance > radius) return false;
+      // Category filter
+      if (cat !== "all") {
+        const tags = (d.interests || []).concat(d.moods || []).join(" ").toLowerCase();
+        const catKey = cat.toLowerCase();
+        if (catKey === "historical" || catKey === "heritage") {
+          if (!tags.includes("historic") && !tags.includes("heritage")) return false;
+        } else if (!tags.includes(catKey)) {
+          return false;
+        }
+      }
+      // Search filter
+      if (search) {
+        const text = `${d.name} ${d.district} ${d.description || ""}`.toLowerCase();
+        if (!text.includes(search)) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => a.distance - b.distance);
+}
+
 function renderExploreView() {
+  const n = (state.destinations && Array.isArray(state.destinations)) ? state.destinations.length : 0;
+  const radius = state.exploreRadius || "all";
+  const cat = state.exploreCategory || "all";
+  const filtered = getFilteredExploreDestinations();
+
+  const CATEGORIES = [
+    { id: "all", label: "All" },
+    { id: "Nature", label: "🌿 Nature" },
+    { id: "Mountains", label: "⛰️ Mountains" },
+    { id: "Historical", label: "🏛️ Heritage / History" },
+    { id: "Waterfalls", label: "🌊 Waterfalls" },
+    { id: "Wildlife", label: "🐅 Wildlife" },
+    { id: "Adventure", label: "🧗 Adventure" },
+    { id: "Temples", label: "🛕 Temples" },
+    { id: "Parks", label: "🌳 Parks" }
+  ];
+
   return `
     <div class="card">
-      <div class="section-title">🧭 ${t("btn_explore_nearby")}</div>
-      <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
-        Browse all 40 verified destinations sorted by travel distance from your starting location.
-      </p>
-      <div class="chip-grid" style="margin-bottom: 16px;">
-        <span class="chip active" onclick="filterByRadius(50)">Within 50 km</span>
-        <span class="chip" onclick="filterByRadius(100)">Within 100 km</span>
-        <span class="chip" onclick="filterByRadius(200)">Within 200 km</span>
-        <span class="chip" onclick="filterByRadius(400)">All Karnataka</span>
+      <!-- Top Bar with List/Map Segmented Toggle -->
+      <div class="explore-top-bar">
+        <div class="section-title" style="margin-bottom: 0;">🧭 ${t("btn_explore_nearby")}</div>
+        <div class="view-toggle">
+          <button class="view-toggle-btn ${state.exploreViewMode === 'list' ? 'active' : ''}" onclick="setExploreViewMode('list')">📋 List</button>
+          <button class="view-toggle-btn ${state.exploreViewMode === 'map' ? 'active' : ''}" onclick="setExploreViewMode('map')">🗺️ Map</button>
+        </div>
       </div>
 
-      <div style="display: flex; flex-direction: column; gap: 10px;">
-        ${state.destinations.map(d => `
-          <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px; background: var(--bg-main); border-radius: var(--radius-md); border: 1px solid var(--border); cursor: pointer;" onclick="showDestinationDetails(${d.id})">
-            <div>
-              <div style="font-weight: 700; font-size: 14px;">${d.name}</div>
-              <div style="font-size: 11px; color: var(--text-muted);">${d.city} • ${d.destination_type}</div>
-            </div>
-            <div style="text-align: right;">
-              <span class="chip active" style="font-size: 11px;">${d.distance_km} km</span>
-            </div>
-          </div>
+      <!-- Search Input Bar -->
+      <div class="search-box-wrap">
+        <span class="search-box-icon">🔍</span>
+        <input type="text" id="explore-search-input" class="search-box-input" placeholder="Search by destination, district, or tag..." value="${state.exploreSearchQuery || ''}" oninput="handleExploreSearch(this.value)">
+      </div>
+
+      <!-- Category Filter Chips -->
+      <div class="filter-chips-scroll">
+        ${CATEGORIES.map(c => `
+          <button type="button" class="chip ${cat === c.id ? 'active' : ''}" style="white-space: nowrap; font-size: 11px;" onclick="setExploreCategory('${c.id}')">
+            ${c.label}
+          </button>
         `).join("")}
       </div>
+
+      <!-- Distance Radius Filter Chips -->
+      <div class="chip-grid" style="margin-bottom: 14px;">
+        <span class="chip ${radius === 50 ? 'active' : ''}" onclick="setExploreRadius(50)">Within 50 km</span>
+        <span class="chip ${radius === 100 ? 'active' : ''}" onclick="setExploreRadius(100)">Within 100 km</span>
+        <span class="chip ${radius === 200 ? 'active' : ''}" onclick="setExploreRadius(200)">Within 200 km</span>
+        <span class="chip ${radius === 'all' ? 'active' : ''}" onclick="setExploreRadius('all')">All Karnataka</span>
+      </div>
+
+      <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+        Showing <strong>${filtered.length}</strong> of <strong>${state.destinations.length}</strong> destinations sorted by proximity from <strong>${state.preferences.starting_location}</strong>.
+      </p>
+
+      <!-- Map View Container -->
+      ${state.exploreViewMode === 'map' ? `
+        <div id="map-offline-banner" class="map-offline-banner" style="display: none;">
+          ⚠️ Offline Mode: Showing local marker coordinates. Internet required for OpenStreetMap tiles.
+        </div>
+        <div id="explore-map"></div>
+        <p style="font-size: 11px; color: var(--text-muted); text-align: center;">
+          Tap any marker on the map to view destination distance and trip details.
+        </p>
+      ` : `
+        <!-- List View -->
+        ${n === 0 ? `
+          <div style="background: #fee2e2; border: 2px solid #ef4444; color: #b91c1c; padding: 20px 16px; border-radius: 12px; text-align: center; margin: 16px 0;">
+            <div style="font-size: 28px; margin-bottom: 6px;">🚨</div>
+            <div style="font-weight: 800; font-size: 15px;">Unable to load destinations</div>
+            <div style="font-size: 12px; margin-top: 4px;">Please return home or refresh the app.</div>
+          </div>
+        ` : filtered.length === 0 ? `
+          <div style="text-align: center; padding: 28px 16px; color: var(--text-muted); font-size: 13px;">
+            <div style="font-size: 24px; margin-bottom: 8px;">📍</div>
+            <div style="font-weight: 700; color: var(--text-main); margin-bottom: 6px;">
+              All ${n} destinations loaded, but none are within ${radius} km of your location.
+            </div>
+            <p style="font-size: 12px; margin-bottom: 14px;">
+              Try tapping "All Karnataka" to view all 40 destinations sorted by proximity.
+            </p>
+            <button class="chip active" style="padding: 6px 16px; font-size: 12px;" onclick="setExploreRadius('all')">Show All Karnataka Places</button>
+          </div>
+        ` : `
+          <div class="dest-cards-list">
+            ${filtered.map(d => `
+              <div class="dest-card" onclick="showDestinationDetails('${d.id}')">
+                <div class="dest-card-img-wrap">
+                  <img src="${d.image}" alt="${d.name}" class="dest-card-img" onerror="handleImageError(this, '${d.id}')">
+                  <div class="dest-card-dist-badge">📍 ${d.distance} km away</div>
+                </div>
+                <div class="dest-card-body">
+                  <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+                    <div>
+                      <div class="dest-card-title">${d.name}</div>
+                      <div class="dest-card-subtitle">${d.district} • ${d.recommendedTime}</div>
+                    </div>
+                    <span class="badge-season">☀️ Best: ${formatBestMonths(d.bestMonths).split(',')[0]}</span>
+                  </div>
+                  <p style="font-size: 12px; color: var(--text-muted); margin: 6px 0;">${d.description}</p>
+                  <div class="chip-grid" style="margin: 6px 0;">
+                    ${(d.interests || []).slice(0, 3).map(i => `<span class="chip" style="font-size: 10px; padding: 2px 6px;">${i}</span>`).join("")}
+                  </div>
+                  <div class="dest-card-footer">
+                    <span class="dest-card-cost">₹${d.costPerPersonINR} <span style="font-size: 10px; font-weight: normal; color: var(--text-muted);">/person</span></span>
+                    <button class="chip active" style="font-size: 11px;" onclick="event.stopPropagation(); showDestinationDetails('${d.id}')">View Details →</button>
+                  </div>
+                </div>
+              </div>
+            `).join("")}
+          </div>
+        `}
+      `}
     </div>
   `;
 }
 
-function filterByRadius(radius) {
-  state.preferences.max_distance = radius;
-  submitTripForm();
+function setExploreRadius(radius) {
+  state.exploreRadius = radius;
+  renderApp();
 }
 
-// 7. Saved Trips View
+// 7. Saved Trips View with Illustrated Empty State & Actions
 function renderSavedTripsView() {
   const trips = state.savedTrips;
   return `
@@ -1070,25 +1844,37 @@ function renderSavedTripsView() {
       <div class="section-title">💾 ${t("sec_saved_trips")} (${trips.length})</div>
       ${!state.currentUser ? `
         <div style="background: var(--primary-soft); padding: 10px; border-radius: var(--radius-md); font-size: 12px; color: var(--primary-dark); margin-bottom: 12px;">
-          ℹ️ ${t("guest_welcome")}. You can save trips locally or <a href="#" onclick="openAuthModal('email')" style="color: var(--primary); font-weight: 700;">sign in with email OTP</a> to sync across devices.
+          ℹ️ Trips are securely saved in your local device storage and accessible offline.
         </div>
       ` : ''}
 
       ${trips.length === 0 ? `
-        <div style="text-align: center; padding: 24px 0; color: var(--text-muted); font-size: 13px;">
-          No saved trips yet. Plan a trip and tap "Save Trip"!
+        <!-- Illustrated Empty State -->
+        <div class="empty-state-wrap">
+          <div class="empty-state-icon">🎒</div>
+          <div class="empty-state-title">No Saved Trips Yet</div>
+          <div class="empty-state-desc">
+            Explore 40 scenic Karnataka escapes or build a personalized itinerary, then tap "Save Trip" to keep your favorites handy!
+          </div>
+          <button class="btn-primary" onclick="switchView('plan')">
+            🧭 Plan a Trip
+          </button>
         </div>
       ` : `
         <div style="display: flex; flex-direction: column; gap: 10px;">
           ${trips.map((tr, idx) => `
-            <div style="padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: white; display: flex; justify-content: space-between; align-items: center;">
-              <div>
+            <div class="saved-trip-card">
+              <div style="flex: 1;">
                 <div style="font-weight: 700; font-size: 14px;">${tr.destination_name}</div>
-                <div style="font-size: 11px; color: var(--text-muted);">Budget: ₹${tr.budget} • ${tr.travel_mode}</div>
+                <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                  📍 ${tr.district || 'Karnataka'} • ₹${tr.cost_per_person || tr.budget}/person • Mode: ${tr.travel_mode || 'Car'}
+                </div>
+                <div style="font-size: 10px; color: var(--text-muted);">Saved on ${tr.date || 'Recent'}</div>
               </div>
-              <div style="display: flex; gap: 6px;">
-                <button class="chip active" onclick="showDestinationDetails(${tr.destination_id})">Open</button>
-                <button class="chip" onclick="deleteSavedTrip(${idx})">✕</button>
+              <div style="display: flex; gap: 6px; align-items: center;">
+                <button class="chip active" onclick="showDestinationDetails('${tr.destination_id}')">Open</button>
+                <button class="chip" style="color: #25d366; border-color: #86efac;" onclick="shareTripOnWhatsApp('${tr.destination_id}')" title="Share on WhatsApp">💬</button>
+                <button class="chip" style="color: #dc2626; border-color: #fca5a5;" onclick="deleteSavedTrip(${idx})" title="Delete Trip">✕</button>
               </div>
             </div>
           `).join("")}
@@ -1099,13 +1885,15 @@ function renderSavedTripsView() {
 }
 
 function saveTripToProfile(destId) {
-  const d = state.destinations.find(x => x.id === destId);
+  const d = state.destinations.find(x => String(x.id) === String(destId));
   if (!d) return;
 
   const trip = {
     id: Date.now(),
     destination_id: d.id,
     destination_name: d.name,
+    district: d.district,
+    cost_per_person: d.costPerPersonINR,
     budget: state.preferences.budget,
     travel_mode: state.preferences.transportation,
     date: new Date().toLocaleDateString()
@@ -1114,6 +1902,7 @@ function saveTripToProfile(destId) {
   state.savedTrips.push(trip);
   localStorage.setItem("travelmate_saved_trips", JSON.stringify(state.savedTrips));
   alert(`✓ Trip to ${d.name} saved!`);
+  renderApp();
 }
 
 function deleteSavedTrip(idx) {
@@ -1122,58 +1911,118 @@ function deleteSavedTrip(idx) {
   renderApp();
 }
 
-// 8. Feedback & Analytics View
+// 8. Reviews View with Interactive Tappable Stars & Dynamic Stored Reviews
+function setReviewStars(stars) {
+  state.selectedReviewStars = stars;
+  const starsContainer = document.getElementById("star-rating-selector");
+  if (starsContainer) {
+    starsContainer.querySelectorAll(".star-btn").forEach((btn, i) => {
+      btn.classList.toggle("active", i < stars);
+    });
+  }
+}
+
 function renderFeedbackView() {
-  const avg = state.feedbacks.length ? (state.feedbacks.reduce((a, b) => a + b.rating, 0) / state.feedbacks.length).toFixed(1) : "5.0";
+  const reviews = state.feedbacks || [];
+  const avg = reviews.length ? (reviews.reduce((a, b) => a + (Number(b.rating) || 5), 0) / reviews.length).toFixed(1) : "5.0";
+  const starsCount = Math.round(Number(avg));
+  const starsDisplay = "★".repeat(starsCount) + "☆".repeat(5 - starsCount);
+
   return `
     <div class="card">
-      <div class="section-title">⭐ Traveler Reviews & Feedback</div>
-      <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px; background: var(--bg-main); padding: 12px; border-radius: var(--radius-md);">
-        <div style="font-size: 32px; font-weight: 800; color: var(--primary);">${avg}</div>
+      <div class="section-title">⭐ Traveler Reviews & Community Ratings</div>
+
+      <!-- Real Dynamic Community Rating Banner (Computed Strictly from Stored Reviews) -->
+      <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px; background: var(--surface-subtle); padding: 14px; border-radius: var(--radius-md); border: 1px solid var(--border);">
+        <div style="font-size: 36px; font-weight: 900; color: var(--primary-dark);">${avg}</div>
         <div style="font-size: 12px;">
-          <div>★★★★★ Community Rating</div>
-          <div style="color: var(--text-muted);">${state.feedbacks.length + 18} verified traveler reviews</div>
+          <div style="color: #f59e0b; font-size: 15px; font-weight: 700; letter-spacing: 2px;">${starsDisplay}</div>
+          <div style="color: var(--text-muted); margin-top: 2px;">Based on ${reviews.length} traveler reviews</div>
         </div>
       </div>
 
-      <!-- Feedback Form -->
+      <!-- Add Review Form -->
+      <div class="section-title" style="font-size: 14px; margin-top: 14px;">✍️ Write a Review</div>
+
       <div class="form-group">
-        <label class="form-label">Destination Visited</label>
+        <label class="form-label">Destination Visited (${state.destinations.length} Available)</label>
         <select id="fb-destination" class="form-select">
-          ${state.destinations.slice(0, 15).map(d => `<option value="${d.name}">${d.name}</option>`).join("")}
+          ${state.destinations.map(d => `<option value="${d.name}">${d.name} (${d.district})</option>`).join("")}
         </select>
       </div>
 
+      <!-- Tappable Star Rating -->
       <div class="form-group">
-        <label class="form-label">Your Rating (1 to 5 Stars)</label>
-        <select id="fb-rating" class="form-select">
-          <option value="5">★★★★★ 5 - Exceptional Experience</option>
-          <option value="4">★★★★☆ 4 - Great Trip</option>
-          <option value="3">★★★☆☆ 3 - Good</option>
-          <option value="2">★★☆☆☆ 2 - Average</option>
-          <option value="1">★☆☆☆☆ 1 - Poor</option>
-        </select>
+        <label class="form-label">Your Rating</label>
+        <div class="star-rating-select" id="star-rating-selector">
+          ${[1, 2, 3, 4, 5].map(s => `
+            <span class="star-btn ${s <= (state.selectedReviewStars || 5) ? 'active' : ''}" onclick="setReviewStars(${s})">★</span>
+          `).join("")}
+        </div>
       </div>
 
       <div class="form-group">
-        <label class="form-label">Comments & Travel Tips</label>
-        <textarea id="fb-comments" class="form-input" rows="3" placeholder="Share your experience for other travelers..."></textarea>
+        <label class="form-label">Your Name</label>
+        <input type="text" id="fb-user-name" class="form-input" placeholder="e.g. Priyanshu, Rohan..." value="${state.currentUser ? state.currentUser.name : ''}">
       </div>
 
-      <button class="btn-primary" onclick="submitUserFeedback()">Submit Review</button>
+      <div class="form-group">
+        <label class="form-label">Review & Travel Tips</label>
+        <textarea id="fb-comments" class="form-input" rows="3" placeholder="Share your experience, best photo spots, or food recommendations..."></textarea>
+      </div>
+
+      <button class="btn-primary" onclick="submitUserFeedback()">
+        Post Community Review
+      </button>
+
+      <!-- Dynamic Community Reviews List -->
+      <div class="section-title" style="font-size: 14px; margin-top: 24px;">💬 Recent Community Reviews (${reviews.length})</div>
+      <div style="margin-top: 10px;">
+        ${reviews.map(rev => {
+    const rStars = "★".repeat(rev.rating || 5) + "☆".repeat(5 - (rev.rating || 5));
+    return `
+            <div class="review-item-card">
+              <div class="review-item-header">
+                <span class="review-item-user">${rev.name || 'Anonymous Traveler'}</span>
+                <span class="review-item-date">${rev.date || 'Recent'}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span class="review-item-dest">📍 ${rev.destination || rev.dest || 'Karnataka'}</span>
+                <span style="color: #f59e0b; font-size: 12px; letter-spacing: 1px;">${rStars}</span>
+              </div>
+              <p class="review-item-text">${rev.comment || rev.comments || 'Great experience!'}</p>
+            </div>
+          `;
+  }).join("")}
+      </div>
     </div>
   `;
 }
 
 function submitUserFeedback() {
-  const dest = document.getElementById("fb-destination")?.value || "Nandi Hills";
-  const rating = parseInt(document.getElementById("fb-rating")?.value || "5");
-  const comments = document.getElementById("fb-comments")?.value || "";
+  const dest = document.getElementById("fb-destination")?.value || (state.destinations[0] && state.destinations[0].name) || "Nandi Hills";
+  const name = document.getElementById("fb-user-name")?.value.trim() || (state.currentUser ? state.currentUser.name : "Fellow Traveler");
+  const comment = document.getElementById("fb-comments")?.value.trim();
+  const rating = state.selectedReviewStars || 5;
 
-  state.feedbacks.push({ dest, rating, comments, date: new Date().toLocaleDateString() });
+  if (!comment) {
+    alert("Please write a short comment about your experience.");
+    return;
+  }
+
+  const newReview = {
+    id: "rev_" + Date.now(),
+    name: name,
+    destination: dest,
+    rating: rating,
+    comment: comment,
+    date: new Date().toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })
+  };
+
+  state.feedbacks.unshift(newReview);
   localStorage.setItem("travelmate_feedbacks", JSON.stringify(state.feedbacks));
-  alert("Thank you for your feedback! It helps improve recommendations for everyone.");
-  switchView("home");
+  alert(`✓ Thank you ${name}! Your review for ${dest} has been published.`);
+  renderApp();
 }
 
 // --- Floating AI Chat Assistant ---
@@ -1243,14 +2092,14 @@ function getChatReply(msg) {
     }
     if (!d) d = state.destinations[0];
   }
-  if (!d) d = { name: "Karnataka", average_cost_per_person: 1200, best_season: "October to March", best_months: "October to February" };
+  if (!d) d = { name: "Karnataka", costPerPersonINR: 600, bestMonths: [10, 11, 12, 1, 2] };
 
   const destName = d.name || "Karnataka";
-  const avgCost = d.average_cost_per_person || 1200;
-  const bestSeason = d.best_season || "October to March";
-  const bestMonths = d.best_months || "October to February";
-  const localFood = d.local_food || "Mysore Masala Dosa, Filter Coffee, and Bisi Bele Bath";
-  const activities = d.activities || "Heritage walks, Nature trails, and Scenic viewpoints";
+  const avgCost = d.costPerPersonINR || 600;
+  const bestSeason = formatBestMonths(d.bestMonths) || "October to March";
+  const bestMonths = formatBestMonths(d.bestMonths) || "October to February";
+  const localFood = d.foodOptions === "easy" ? "Mysore Masala Dosa, Filter Coffee, and Bisi Bele Bath" : "Regional snacks and tiffins";
+  const activities = Array.isArray(d.interests) ? d.interests.join(", ") : "Heritage walks, Nature trails, and Scenic viewpoints";
 
   // Days extraction
   const daysMatch = lower.match(/(\d+)\s*(?:day|days)/);
@@ -1341,7 +2190,7 @@ function getChatReply(msg) {
 
   // 9. Transport queries ("how to reach", "drive", "route", "bus", "train")
   if (lower.includes("transport") || lower.includes("reach") || lower.includes("route") || lower.includes("drive") || lower.includes("bus") || lower.includes("train") || lower.includes("cab")) {
-    const dist = d.distance_km || 120;
+    const dist = getDestinationDistance(d) || 120;
     return getVariedReply("transport", [
       `Getting to ${destName} (~${dist} km from Bengaluru): accessible via well-paved state highways, KSRTC Airavat buses, or self-drive cars. Depart early by 6 AM to beat city toll traffic.`,
       `Transport to ${destName}: driving takes around ${d.travel_time_hours || 2.5} hours via the main corridor. KSRTC buses and South Western Railway trains run regularly.`,
@@ -1397,7 +2246,7 @@ async function sendChatMessage() {
 
   // 6. Gather active trip context and 8-factor scores
   const d = state.selectedDestination || (state.destinations && state.destinations[0]) || { name: "Karnataka" };
-  const currentRec = (state.recommendations || []).find(r => r.destination && r.destination.id === d.id);
+  const currentRec = (state.recommendations || []).find(r => r.destination && String(r.destination.id) === String(d.id));
   const factorScores = currentRec ? currentRec.factor_scores : {
     budget: 92,
     interests: 90,
@@ -1459,7 +2308,7 @@ async function sendChatMessage() {
         const errData = await res.json();
         errDetail = typeof errData.detail === "object" ? JSON.stringify(errData.detail) : (errData.detail || JSON.stringify(errData));
       } catch (_) {
-        try { errDetail = await res.text(); } catch (__) {}
+        try { errDetail = await res.text(); } catch (__) { }
       }
       chatError = `${chatEndpoint} returned HTTP ${res.status} (${res.statusText || 'Error'})${errDetail ? ': ' + errDetail.slice(0, 150) : ''}`;
     }

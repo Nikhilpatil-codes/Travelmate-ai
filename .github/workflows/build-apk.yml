@@ -1,0 +1,156 @@
+name: Build and Release Android APK
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Set up Java 17 (Temurin) with Gradle Cache
+        uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Install npm dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            echo "package-lock.json found. Running npm ci..."
+            npm ci
+          elif [ -f package.json ]; then
+            echo "package.json found. Running npm install..."
+            npm install
+          elif [ -f frontend/package.json ]; then
+            echo "frontend/package.json found. Installing in frontend..."
+            cd frontend
+            if [ -f package-lock.json ]; then
+              npm ci
+            else
+              npm install
+            fi
+            cd ..
+          else
+            echo "No package.json found. Skipping npm install."
+          fi
+
+      - name: Build web app
+        run: |
+          if npm run | grep -q "^  build"; then
+            echo "npm build script found in root. Running npm run build..."
+            npm run build
+          elif [ -f frontend/package.json ]; then
+            echo "Building frontend project..."
+            cd frontend && npm run build --if-present && cd ..
+          else
+            echo "No npm build script found. Skipping web build."
+          fi
+
+      - name: Sync web files to Android
+        run: |
+          if [ -f capacitor.config.json ] || [ -f capacitor.config.ts ] || [ -f capacitor.config.js ]; then
+            echo "Capacitor project detected. Syncing with npx cap sync android..."
+            npx cap sync android
+          else
+            echo "Not a Capacitor project. Web assets are bundled natively in android/app/src/main/assets. Skipping cap sync."
+          fi
+
+      - name: Configure Debug Signing Keystore
+        run: |
+          if [ -n "${{ secrets.DEBUG_KEYSTORE_BASE64 }}" ]; then
+            mkdir -p ~/.android
+            echo "${{ secrets.DEBUG_KEYSTORE_BASE64 }}" | base64 -d > ~/.android/debug.keystore
+            echo "Debug signing keystore decoded from DEBUG_KEYSTORE_BASE64 secret into ~/.android/debug.keystore"
+          else
+            echo "::warning::DEBUG_KEYSTORE_BASE64 secret is missing. Updates will not install over the old app because each build will use a freshly generated debug key."
+          fi
+
+      - name: Update versionCode and versionName in Gradle
+        run: |
+          RUN_NUM="${{ github.run_number }}"
+          VERSION_CODE="$RUN_NUM"
+          VERSION_NAME="1.0.$RUN_NUM"
+          GRADLE_FILE="android/app/build.gradle"
+          
+          echo "Updating $GRADLE_FILE to versionCode $VERSION_CODE and versionName $VERSION_NAME..."
+          sed -i "s/versionCode [0-9]\+/versionCode $VERSION_CODE/" "$GRADLE_FILE"
+          sed -i "s/versionName \".*\"/versionName \"$VERSION_NAME\"/" "$GRADLE_FILE"
+          
+          echo "Verifying changes in $GRADLE_FILE..."
+          grep -E "versionCode $VERSION_CODE" "$GRADLE_FILE" || { echo "ERROR: versionCode verification failed!"; exit 1; }
+          grep -E "versionName \"$VERSION_NAME\"" "$GRADLE_FILE" || { echo "ERROR: versionName verification failed!"; exit 1; }
+          echo "Successfully verified versionCode ($VERSION_CODE) and versionName ($VERSION_NAME) in $GRADLE_FILE."
+
+      - name: Make Gradle Wrapper Executable
+        run: |
+          if [ -f android/gradlew ]; then
+            chmod +x android/gradlew
+          fi
+
+      - name: Build Debug APK with Gradle (assembleDebug)
+        working-directory: android
+        run: |
+          if [ ! -f ./gradlew ]; then
+            echo "Gradle wrapper not found. Generating wrapper with Gradle 8.7..."
+            gradle wrapper --gradle-version 8.7
+            chmod +x ./gradlew
+          fi
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Prepare Release APK Artifacts
+        run: |
+          RUN_NUM="${{ github.run_number }}"
+          OUTPUT_APK="android/app/build/outputs/apk/debug/app-debug.apk"
+          
+          if [ ! -f "$OUTPUT_APK" ]; then
+            echo "ERROR: Output APK not found at $OUTPUT_APK"
+            find android -name "*.apk"
+            exit 1
+          fi
+          
+          VERSIONED_APK="TravelMate-AI-v1.0.${RUN_NUM}-debug.apk"
+          LATEST_APK="TravelMate-AI-latest.apk"
+          
+          cp "$OUTPUT_APK" "$VERSIONED_APK"
+          cp "$OUTPUT_APK" "$LATEST_APK"
+          
+          echo "Created artifacts:"
+          ls -lh "$VERSIONED_APK" "$LATEST_APK"
+          sha256sum "$VERSIONED_APK" "$LATEST_APK"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v1.0.${{ github.run_number }}"
+          name: "TravelMate AI v1.0.${{ github.run_number }}"
+          body: |
+            ### TravelMate AI Android Release v1.0.${{ github.run_number }}
+            
+            Automated production build from GitHub Actions run `#${{ github.run_number }}` on commit `${{ github.sha }}`.
+            
+            #### 📦 Direct Downloads:
+            - **Specific Version:** [`TravelMate-AI-v1.0.${{ github.run_number }}-debug.apk`](https://github.com/${{ github.repository }}/releases/download/v1.0.${{ github.run_number }}/TravelMate-AI-v1.0.${{ github.run_number }}-debug.apk)
+            - **Always Latest:** [`TravelMate-AI-latest.apk`](https://github.com/${{ github.repository }}/releases/latest/download/TravelMate-AI-latest.apk)
+          draft: false
+          prerelease: false
+          files: |
+            TravelMate-AI-v1.0.${{ github.run_number }}-debug.apk
+            TravelMate-AI-latest.apk

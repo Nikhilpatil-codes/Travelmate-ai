@@ -1,12 +1,72 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root_layout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/window_background">
+    android:background="@color/splash_background">
 
+    <!-- WebView with dark #1C155F background to eliminate white flashes -->
     <WebView
         android:id="@+id/webview"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent"
+        android:background="@color/splash_background" />
+
+    <!-- Startup Animated Splash Overlay -->
+    <FrameLayout
+        android:id="@+id/splash_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/splash_background">
+
+        <!-- Centered App Icon: rounded square ~140dp wide on #1C155F -->
+        <ImageView
+            android:id="@+id/splash_icon"
+            android:layout_width="140dp"
+            android:layout_height="140dp"
+            android:layout_gravity="center"
+            android:src="@drawable/splash_icon"
+            android:scaleType="fitCenter"
+            android:adjustViewBounds="true" />
+
+        <!-- Fallback Retry View if loading fails or times out -->
+        <LinearLayout
+            android:id="@+id/splash_retry_container"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:padding="24dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/splash_error_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Unable to load TravelMate AI"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:layout_marginBottom="16dp" />
+
+            <ProgressBar
+                android:id="@+id/splash_loading_spinner"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:indeterminate="true"
+                android:layout_marginBottom="16dp" />
+
+            <Button
+                android:id="@+id/splash_retry_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Retry"
+                android:backgroundTint="@color/primary"
+                android:textColor="#FFFFFF" />
+        </LinearLayout>
+
+    </FrameLayout>
 
 </FrameLayout>
