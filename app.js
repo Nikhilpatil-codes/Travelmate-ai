@@ -131,16 +131,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     localStorage.setItem("travelmate_feedbacks", JSON.stringify(state.feedbacks));
   }
 
-  // Handle Splash Screen Dismissal
-  const splashEl = document.getElementById("app-splash");
-  if (splashEl) {
-    setTimeout(() => {
-      splashEl.classList.add("splash-hidden");
-      setTimeout(() => {
-        splashEl.style.display = "none";
-      }, 500);
-    }, 1100);
-  }
+  // Startup flow handled natively with smooth zoom animation
 
   // Cryptographically restore and verify session via Supabase Auth
   if (window.TravelMateAuth) {
@@ -767,12 +758,6 @@ function renderHomeView() {
   // Trending this season destinations
   const trending = state.destinations.filter(d => Array.isArray(d.bestMonths) && d.bestMonths.includes(currMonth)).slice(0, 8);
 
-  const n = (state.destinations && Array.isArray(state.destinations)) ? state.destinations.length : 0;
-  const isDestUndefined = (typeof DESTINATIONS === "undefined" && (typeof window === "undefined" || typeof window.DESTINATIONS === "undefined"));
-  const origin = getOriginCoords();
-  const buildVer = "v1.0.1";
-  const originStr = `${origin.lat.toFixed(4)},${origin.lng.toFixed(4)}`;
-
   return `
     <!-- Full-Width Karnataka Hero Card -->
     <div class="hero-karnataka">
@@ -1166,10 +1151,10 @@ function renderResultsView() {
     return `
       <div class="card" style="text-align: center; padding: 32px 16px;">
         <div style="background: #ef4444; color: #ffffff; padding: 16px; border-radius: 12px; font-weight: 800; font-size: 15px; margin-bottom: 12px; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);">
-          🚨 RED ERROR: DESTINATIONS is undefined or 0 loaded!
+          Unable to load destinations
         </div>
         <p style="color: var(--text-muted); font-size: 13px; margin: 8px 0 16px;">
-          The bundled destinations dataset failed to load in the APK. Check destinations.js.
+          Please check your connection and reload the app.
         </p>
         <button class="btn-primary" onclick="switchView('home')">Return Home</button>
       </div>
@@ -1798,8 +1783,8 @@ function renderExploreView() {
         ${n === 0 ? `
           <div style="background: #fee2e2; border: 2px solid #ef4444; color: #b91c1c; padding: 20px 16px; border-radius: 12px; text-align: center; margin: 16px 0;">
             <div style="font-size: 28px; margin-bottom: 6px;">🚨</div>
-            <div style="font-weight: 800; font-size: 15px;">RED ERROR: DESTINATIONS is undefined or 0 loaded!</div>
-            <div style="font-size: 12px; margin-top: 4px;">Check destinations.js asset loading inside the APK.</div>
+            <div style="font-weight: 800; font-size: 15px;">Unable to load destinations</div>
+            <div style="font-size: 12px; margin-top: 4px;">Please return home or refresh the app.</div>
           </div>
         ` : filtered.length === 0 ? `
           <div style="text-align: center; padding: 28px 16px; color: var(--text-muted); font-size: 13px;">
